@@ -1,0 +1,8 @@
+name: imputation-1.0dev
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - bioconda::tabix=0.2.6
+  - bioconda::bcftools=1.10.2
