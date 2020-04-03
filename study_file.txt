@@ -1,0 +1,2 @@
+chromosome	vcf	
+21	/gpfs/hpc/home/a72094/hpcproject/genomic_references/CEDAR/genotypes/genotyped/by_chr/CEDAR_GRCh37_chr21.vcf.gz
