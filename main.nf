@@ -23,7 +23,7 @@ process eagle_prephasing{
     
     input:
     set chromosome, file(vcf) from vcf_ch
-    file genetic_map from genetic_map_ch
+    file genetic_map from genetic_map_ch.collect()
     file phasing_reference from phasing_ref_ch.collect()
 
     output:
