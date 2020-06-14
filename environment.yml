@@ -1,4 +1,4 @@
-name: imputation-1.0dev
+name: nf-core-imputation-1.0dev
 channels:
   - conda-forge
   - bioconda
@@ -6,3 +6,12 @@ channels:
 dependencies:
   - bioconda::tabix=0.2.6
   - bioconda::bcftools=1.10.2
+  - bioconda::plink2=1.90b3.35
+  - bioconda::csvtk=0.20.0
+  - bioconda::vcftools=0.1.16
+  - bioconda::crossmap=0.4.1
+  - bioconda::java-jdk=8.0.112
+  - conda-forge::r-dplyr=1.0.0
+  - conda-forge::r-ggplot2=3.3.1
+  - conda-forge::r-dmwr=0.4.1
+  - conda-forge::r-optparse=1.6.6
