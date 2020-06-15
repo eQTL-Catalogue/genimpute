@@ -41,7 +41,21 @@ def helpMessage() {
     """.stripIndent()
 }
 
+// Show help emssage
+if (params.help){
+    helpMessage()
+    exit 0
+}
 
+// Has the run name been specified by the user?
+//  this has the bonus effect of catching both -name and --name
+custom_runName = params.name
+if( !(workflow.runName ==~ /[a-z]+_[a-z]+/) ){
+  custom_runName = workflow.runName
+}
+
+
+// Define input channels
 Channel
     .fromPath(params.ref_genome)
     .ifEmpty { exit 1, "Reference genome fasta file not found: ${params.ref_genome}" } 
@@ -113,6 +127,16 @@ if(workflow.profile == 'awsbatch'){
 if(params.email) summary['E-mail Address'] = params.email
 log.info summary.collect { k,v -> "${k.padRight(21)}: $v" }.join("\n")
 log.info "========================================="
+
+
+if( workflow.profile == 'awsbatch') {
+  // AWSBatch sanity checking
+  if (!params.awsqueue || !params.awsregion) exit 1, "Specify correct --awsqueue and --awsregion parameters on AWSBatch!"
+  if (!workflow.workDir.startsWith('s3') || !params.outdir.startsWith('s3')) exit 1, "Specify S3 URLs for workDir and outdir parameters on AWSBatch!"
+  // Check workDir/outdir paths to be S3 buckets if running on AWSBatch
+  // related: https://github.com/nextflow-io/nextflow/issues/813
+  if (!workflow.workDir.startsWith('s3:') || !params.outdir.startsWith('s3:')) exit 1, "Workdir or Outdir not on S3 - specify S3 Buckets for each to run on AWSBatch!"
+}
 
 process harmonise_genotypes{
     input:
