@@ -51,9 +51,9 @@ process harmonise_genotypes{
     }
     else {
     """
-    cp $study_name_bed harmonized.bed
-    cp $study_name_bim harmonized.bim
-    cp $study_name_fam harmonized.fam
+    cp $study_name_bed harmonised.bed
+    cp $study_name_bim harmonised.bim
+    cp $study_name_fam harmonised.fam
     """
     }
 }
