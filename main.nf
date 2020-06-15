@@ -29,6 +29,48 @@ Channel
     .ifEmpty { exit 1, "Eagle genetic map file not found: ${params.eagle_genetic_map}" } 
     .set { genetic_map_ch }
 
+// Header log info
+log.info """=======================================================
+                                          ,--./,-.
+          ___     __   __   __   ___     /,-._.--~\'
+    |\\ | |__  __ /  ` /  \\ |__) |__         }  {
+    | \\| |       \\__, \\__/ |  \\ |___     \\`-._,-`-,
+                                          `._,._,\'
+eQTL-Catalogue/genimpute v${workflow.manifest.version}"
+======================================================="""
+def summary = [:]
+summary['Pipeline Name']            = 'eQTL-Catalogue/genimpute'
+summary['Pipeline Version']         = workflow.manifest.version
+summary['Run Name']                 = custom_runName ?: workflow.runName
+summary['PLINK bfile']              = params.bfile
+summary['Reference genome']         = params.ref_genome
+summary['Harmonise genotypes']      = params.harmonise_genotypes
+summary['Harmonisation ref panel']  = params.ref_panel
+summary['Eagle genetic map']        = params.eagle_genetic_map
+summary['Eagle reference panel']    = params.eagle_phasing_reference
+summary['Minimac4 reference panel'] = params.minimac_imputation_reference
+summary['Max Memory']               = params.max_memory
+summary['Max CPUs']                 = params.max_cpus
+summary['Max Time']                 = params.max_time
+summary['Output name']              = params.output_name
+summary['Output dir']               = params.outdir
+summary['Working dir']              = workflow.workDir
+summary['Container Engine']         = workflow.containerEngine
+if(workflow.containerEngine) summary['Container'] = workflow.container
+summary['Current home']             = "$HOME"
+summary['Current user']             = "$USER"
+summary['Current path']             = "$PWD"
+summary['Working dir']              = workflow.workDir
+summary['Script dir']               = workflow.projectDir
+summary['Config Profile']           = workflow.profile
+if(workflow.profile == 'awsbatch'){
+   summary['AWS Region']            = params.awsregion
+   summary['AWS Queue']             = params.awsqueue
+}
+if(params.email) summary['E-mail Address'] = params.email
+log.info summary.collect { k,v -> "${k.padRight(21)}: $v" }.join("\n")
+log.info "========================================="
+
 process harmonise_genotypes{
     input:
     set file(study_name_bed), file(study_name_bim), file(study_name_fam) from bfile_ch
