@@ -1,3 +1,46 @@
+def helpMessage() {
+    log.info"""
+    =======================================================
+                                              ,--./,-.
+              ___     __   __   __   ___     /,-._.--~\'
+        |\\ | |__  __ /  ` /  \\ |__) |__         }  {
+        | \\| |       \\__, \\__/ |  \\ |___     \\`-._,-`-,
+                                              `._,._,\'
+     eQTL-Catalogue/genimpute v${workflow.manifest.version}
+    =======================================================
+    Usage:
+    The typical command for running the pipeline is as follows:
+    nextflow run main.nf -profile eqtl_catalogue -resume\
+        --bfile /gpfs/hpc/projects/genomic_references/CEDAR/genotypes/PLINK_100718_1018/CEDAR\
+        --harmonise_genotypes true\
+        --output_name CEDAR_GRCh37_genotyped\
+        --outdir CEDAR
+
+    Mandatory arguments:
+      --bfile                       Path to the TSV file containing pipeline inputs (VCF, expression matrix, metadata)
+      --output_name                 Prefix for the output files
+
+    Genotype harmonisation & QC:
+      --harmonise_genotypes         Run GenotypeHarmonizer on the raw genotypes to correct flipped/swapped alleles (default: true)
+      --ref_panel                   Reference panel used by the GenotypeHarmonizer. Ideally should match the reference panel used for imputation.
+      --ref_genome                  Reference genome fasta file for the rae genotypes (typically GRCh37).
+
+    Phasing & Imputation:
+      --eagle_genetic_map           Eagle genetic map file
+      --eagle_phasing_reference     Phasing reference panel for Eagle (typically 1000 Genomes Phase 3)
+      --minimac_imputation_reference Imputation reference panel for Minimac4 in M3VCF format (typically 1000 Genomes Phase 3)
+    
+    Other options:
+      --outdir                      The output directory where the results will be saved
+      --email                       Set this parameter to your e-mail address to get a summary e-mail with details of the run sent to you when the workflow exits
+      -name                         Name for the pipeline run. If not specified, Nextflow will automatically generate a random mnemonic.
+    
+    AWSBatch options:
+      --awsqueue                    The AWSBatch JobQueue that needs to be set when running on AWSBatch
+      --awsregion                   The AWS Region for your AWS Batch job to run on
+    """.stripIndent()
+}
+
 
 Channel
     .fromPath(params.ref_genome)
