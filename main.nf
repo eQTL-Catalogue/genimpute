@@ -22,13 +22,18 @@ def helpMessage() {
 
     Genotype harmonisation & QC:
       --harmonise_genotypes         Run GenotypeHarmonizer on the raw genotypes to correct flipped/swapped alleles (default: true)
-      --ref_panel                   Reference panel used by the GenotypeHarmonizer. Ideally should match the reference panel used for imputation.
-      --ref_genome                  Reference genome fasta file for the rae genotypes (typically GRCh37).
+      --ref_panel                   Reference panel used by GenotypeHarmonizer. Ideally should match the reference panel used for imputation.
+      --ref_genome                  Reference genome fasta file for the raw genotypes (typically GRCh37).
 
     Phasing & Imputation:
       --eagle_genetic_map           Eagle genetic map file
       --eagle_phasing_reference     Phasing reference panel for Eagle (typically 1000 Genomes Phase 3)
       --minimac_imputation_reference Imputation reference panel for Minimac4 in M3VCF format (typically 1000 Genomes Phase 3)
+      --r2_thresh                   Imputation quality score threshold for filtering poorly imputed variants
+
+    CrossMap.py:
+      --target_ref                  Reference genome fasta file for the target genome assembly (e.g. GRCh38)
+      --chain_file                  Chain file to translate genomic cooridnates from the source assembly to target assembly
     
     Other options:
       --outdir                      The output directory where the results will be saved
@@ -116,6 +121,9 @@ summary['Harmonisation ref panel']  = params.ref_panel
 summary['Eagle genetic map']        = params.eagle_genetic_map
 summary['Eagle reference panel']    = params.eagle_phasing_reference
 summary['Minimac4 reference panel'] = params.minimac_imputation_reference
+summary['CrossMap reference genome'] = params.target_ref
+summary['CrossMap chain file']      = params.chain_file
+summary['R2 thresh']      = params.chain_file
 summary['Max Memory']               = params.max_memory
 summary['Max CPUs']                 = params.max_cpus
 summary['Max Time']                 = params.max_time
@@ -261,7 +269,7 @@ process split_by_chr{
         saveAs: {filename -> if (filename.indexOf(".vcf.gz") > 0) filename else null }
     
     input:
-    set file(input_vcf), file(input_vcf_index) from split_vcf_input
+    tuple file(input_vcf), file(input_vcf_index) from split_vcf_input
     each chr from Channel.from(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22)
 
     output:
@@ -276,12 +284,12 @@ process split_by_chr{
 process eagle_prephasing{
 
     input:
-    set chromosome, file(vcf) from individual_chromosomes
+    tuple chromosome, file(vcf) from individual_chromosomes
     file genetic_map from genetic_map_ch.collect()
     file phasing_reference from phasing_ref_ch.collect()
 
     output:
-    set chromosome, file("chr_${chromosome}.phased.vcf.gz") into phased_vcf_cf
+    tuple chromosome, file("chr_${chromosome}.phased.vcf.gz") into phased_vcf_cf
 
     script:
     """
@@ -303,7 +311,7 @@ process minimac_imputation{
     file imputation_reference from imputation_ref_ch.collect()
 
     output:
-    set chromosome, file("chr_${chromosome}.dose.vcf.gz") into imputed_vcf_cf
+    tuple chromosome, file("chr_${chromosome}.dose.vcf.gz") into imputed_vcf_cf
 
     script:
     """
@@ -358,7 +366,7 @@ process merge_vcf{
 
     shell:
     """
-    bcftools concat ${input_files} | bcftools sort -Oz -o output.vcf.gz
+    bcftools concat ${input_files.join(' ')} | bcftools sort -Oz -o output.vcf.gz
     """
 }
 
