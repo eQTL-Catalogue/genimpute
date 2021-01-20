@@ -186,7 +186,6 @@ process harmonise_genotypes{
 }
 
 process plink_to_vcf{
-
     input:
     set file(bed), file(bim), file(fam) from harmonised_genotypes
 
@@ -201,7 +200,6 @@ process plink_to_vcf{
 }
 
 process vcf_fixref{
-    
     input:
     file input_vcf from harmonised_vcf_ch
     file fasta from ref_genome_ch.collect()
@@ -219,9 +217,8 @@ process vcf_fixref{
 }
 
 process filter_preimpute_vcf{
-
-    publishDir "${params.outdir}", mode: 'copy',
-        saveAs: {filename -> if (filename == "filtered.vcf.gz") "${params.output_name}.vcf.gz" else null }
+    publishDir "${params.outdir}/preimpute/", mode: 'copy',
+        saveAs: {filename -> if (filename == "filtered.vcf.gz") "${params.output_name}_preimpute.vcf.gz" else null }
 
     input:
     file input_vcf from filter_vcf_input
@@ -248,7 +245,7 @@ process filter_preimpute_vcf{
 }
 
 process calculate_missingness{
-    publishDir "${params.outdir}", mode: 'copy',
+    publishDir "${params.outdir}/preimpute/", mode: 'copy',
         saveAs: {filename -> if (filename == "genotypes.imiss") "${params.output_name}.imiss" else null }
     
     input:
@@ -264,8 +261,7 @@ process calculate_missingness{
 }
 
 process split_by_chr{
-
-    publishDir "genotype_qc/${params.outdir}/preimpute_vcf", mode: 'copy',
+    publishDir "${params.outdir}/preimpute/split_chr", mode: 'copy',
         saveAs: {filename -> if (filename.indexOf(".vcf.gz") > 0) filename else null }
     
     input:
@@ -282,7 +278,6 @@ process split_by_chr{
 }
 
 process eagle_prephasing{
-
     input:
     tuple chromosome, file(vcf) from individual_chromosomes
     file genetic_map from genetic_map_ch.collect()
@@ -304,7 +299,7 @@ process eagle_prephasing{
 }
 
 process minimac_imputation{
-    publishDir "${params.outdir}/postimpute_vcf/", mode: 'copy', pattern: "*.dose.vcf.gz"
+    publishDir "${params.outdir}/postimpute/", mode: 'copy', pattern: "*.dose.vcf.gz"
  
     input:
     set chromosome, file(vcf) from phased_vcf_cf
@@ -371,7 +366,7 @@ process merge_vcf{
 }
 
 process keep_chromosomes{
-    publishDir "${params.outdir}/crossmap_vcf", mode: 'copy',
+    publishDir "${params.outdir}/postimpute/crossmap_vcf", mode: 'copy',
         saveAs: {filename -> if (filename == "renamed.vcf.gz") "${params.output_name}.vcf.gz" else null }
     
     input:
@@ -389,7 +384,7 @@ process keep_chromosomes{
 }
 
 process maf_filter{
-    publishDir "${params.outdir}/crossmap_vcf", mode: 'copy',
+    publishDir "${params.outdir}/postimpute/crossmap_vcf", mode: 'copy',
         saveAs: {filename -> if (filename == "filtered.vcf.gz") "${params.output_name}.MAF001.vcf.gz" else null }
     
     input:
