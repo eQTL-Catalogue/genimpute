@@ -179,12 +179,15 @@ process extract_female_samples{
     tuple file(bed), file(bim), file(fam) from extract_female_ch
     
     output:
-    file("female_samples.txt") into female_sample_list_ch
+    file("female_samples.txt") into female_sample_list_ch, female_sample_list_ch2
+    file("male_samples.txt") into male_sample_list_ch
     
     script:
     """
     plink2 --bfile ${bed.baseName} --filter-females --make-bed --out females_only
+    plink2 --bfile ${bed.baseName} --filter-males --make-bed --out males_only
     cut -f1 -d' ' females_only.fam > female_samples.txt
+    cut -f1 -d' ' males_only.fam > male_samples.txt
     """
  }
 
@@ -201,9 +204,8 @@ process extract_female_samples{
     sed 's/^23/X/g' ${bim.baseName}.bim > new.bim
     mv new.bim ${bim.baseName}.bim
     
-    module load java-1.8.0_40
-    java -jar ~/software/GenotypeHarmonizer-1.4.20-SNAPSHOT/GenotypeHarmonizer.jar\
-     --input CEDAR_chr23_noHET\
+    java -jar /usr/bin/GenotypeHarmonizer.jar\
+     --input ${bim.baseName}\
      --inputType PLINK_BED\
      --ref ${vcf_file.simpleName}\
      --refType VCF\
@@ -212,14 +214,14 @@ process extract_female_samples{
     """
  }
  
- process process make_vcf{
+ process make_vcf{
     input:
     tuple file(bed), file(bim), file(fam) from harmonised_genotypes
     file fasta from ref_genome_ch.collect()
     tuple file(vcf_file), file(vcf_file_index) from ref_panel_vcf_fixref.collect()
     
     output:
-    file("harmonised_chrX_fixref.vcf.gz") into filter_vcf_input
+    file("harmonised_chrX_fixref.vcf.gz") into filter_vcf_input, preimpute_filter_ch
     
     script:
     """
@@ -239,7 +241,7 @@ process female_qc{
     file(vcf) from filter_vcf_input
 
     output:
-    file(female_passed_regions.txt) into passed_regions
+    file("female_passed_regions.txt") into passed_regions
 
     script:
     """
@@ -252,6 +254,148 @@ process female_qc{
         bcftools norm -m+any |\
         bcftools view -m2 -M2 -Oz -o females_only_filtered.vcf.gz
     bcftools query -f "%CHROM\t%POS\n" females_only_filtered.vcf.gz > female_passed_regions.txt
+    """
+}
+
+process preimpute_filter{
+  input:
+  file(passed_regions) from passed_regions
+  file(vcf) from preimpute_filter_ch
+
+  output:
+  tuple val("X"), file("full_filtered.vcf.gz") into prephasing_ch
+
+  script:
+  """
+  bcftools view -T ${passed_regions} ${vcf} -Oz -o full_filtered.vcf.gz
+  """
+}
+
+process eagle_prephasing{
+    input:
+    tuple chromosome, file(vcf) from prephasing_ch
+    file genetic_map from genetic_map_ch.collect()
+    file phasing_reference from phasing_ref_ch.collect()
+
+    output:
+    tuple chromosome, file("chr_${chromosome}.phased.vcf.gz") into phased_vcf_cf
+
+    script:
+    """
+    bcftools index ${vcf}
+    eagle --vcfTarget=${vcf} \
+    --vcfRef=ALL.chr${chromosome}.phase3_integrated.20130502.genotypes.bcf \
+    --geneticMapFile=${genetic_map} \
+    --chrom=${chromosome} \
+    --outPrefix=chr_${chromosome}.phased \
+    --numThreads=8
+    """
+}
+
+process minimac_imputation{
+    publishDir "${params.outdir}/postimpute/", mode: 'copy', pattern: "*.dose.vcf.gz"
+ 
+    input:
+    tuple chromosome, file(vcf) from phased_vcf_cf
+    file imputation_reference from imputation_ref_ch.collect()
+
+    output:
+    tuple chromosome, file("chr_${chromosome}.dose.vcf.gz") into imputed_vcf_cf
+
+    script:
+    """
+    minimac4 --refHaps X.Non.Pseudo.Auto.1000g.Phase3.v5.With.Parameter.Estimates.m3vcf.gz \
+    --haps ${vcf} \
+    --prefix chr_${chromosome} \
+    --format GT,DS,GP \
+    --noPhoneHome
+    """
+}
+
+process crossmap_genotypes{
+    input:
+    file chain_file from chain_file_ch.collect()
+    file target_ref from target_ref_ch.collect()
+    tuple chromosome, file(vcf) from imputed_vcf_cf
+
+    output:
+    file "${vcf.simpleName}_mapped.vcf.gz" into mapped_vcf_ch
+
+    shell:
+    """
+    #Exlcude structural variants, beause they break latest version of CrossMap.py
+    bcftools view --exclude-types other ${vcf} -Oz -o ${vcf.simpleName}_noSVs.vcf.gz
     
+    #Run CrossMap.py
+    CrossMap.py vcf ${chain_file} ${vcf.simpleName}_noSVs.vcf.gz ${target_ref} ${vcf.simpleName}_mapped.vcf
+    bgzip ${vcf.simpleName}_mapped.vcf
+    """
+}
+
+process filter_vcf{
+    input:
+    each file(vcf) from mapped_vcf_ch
+    val r2_thresh from Channel.from(params.r2_thresh)
+
+    output:
+    file "${vcf.simpleName}_filtered.vcf.gz" into filtered_vcf_ch
+
+    shell:
+    """
+    bcftools filter -i 'INFO/R2 > ${r2_thresh}' ${vcf} -Oz -o ${vcf.simpleName}_filtered.vcf.gz
+    """
+}
+
+process maf_filter{
+    publishDir "${params.outdir}/postimpute/crossmap_vcf", mode: 'copy',
+        saveAs: {filename -> if (filename == "filtered.vcf.gz") "${params.output_name}.chrX.MAF001.vcf.gz" else null }
+    
+    input:
+    file input_vcf from filtered_vcf_ch
+
+    output:
+    file "filtered.vcf.gz" into filtered_vcf_channel
+
+    shell:
+    """
+    bcftools filter -i 'MAF[0] > 0.01' ${input_vcf} -Oz -o filtered.vcf.gz
+    """
+}
+
+process split_male_female_dosage{
+
+    input:
+    file input_vcf from filtered_vcf_channel
+    file female_samples from female_sample_list_ch2
+    file male_samples from male_sample_list_ch
+
+    output:
+    file "male_dosage_only.vcf" into male_dosage_ch
+    file "female_dosage_only.vcf.gz" into female_dosage_ch
+
+    shell:
+    """
+    #Keep only dosage field
+    bcftools annotate -x ^FORMAT/DS ${input_vcf} -Oz -o dosage_only.vcf.gz
+
+    #Extract male/female samples
+    bcftools view -S ${male_samples} dosage_only.vcf.gz -o male_dosage_only.vcf
+    bcftools view -S ${female_samples} dosage_only.vcf.gz -Oz -o female_dosage_only.vcf.gz
+
+    """
+}
+
+process double_male_dosage{
+    container = "quay.io/biocontainers/mulled-v2-1cd0b686a176341c99080e12c8421b9d154ca6ff:907e9d0e7c2849fd1de4404479de65cbdfcc36f9-0"
+
+    input:
+    file(vcf) from male_dosage_ch
+
+    output:
+    file "double_male_dosage.vcf" into male_ds_double
+
+    shell:
+    """
+    python $baseDir/bin/dosage_multiplier.py -i ${vcf} -o double_male_dosage.vcf
     """
 }
