@@ -7,7 +7,7 @@ parser.add_argument('-i', type=str,help = "input file name")
 parser.add_argument('-o',type=str,help = "output file name")
 args = parser.parse_args()
 
-data = pd.read_csv(args.i,sep='\t')
+data = pd.read_csv(args.i,sep='\t',comment="#")
 
 for n, d in data.iloc[:,9:].iteritems():
     
