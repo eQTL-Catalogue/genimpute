@@ -69,7 +69,7 @@ process create_eagle_bcf{
     tuple val(chr), file(vcf) from create_eagle_bcf_ch
 
     output:
-    tuple val(chr), file("${chr}.bref3") into bcf_ch
+    tuple val(chr), file("${chr}.bcf") into bcf_ch
 
     script:
     """
