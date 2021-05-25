@@ -15,7 +15,7 @@ process rename_chromosomes{
 
     input:
     tuple val(chr), file(vcf) from vcf_file_ch
-    file(chromsome_names) from chr_names_file_ch
+    file(chromsome_names) from chr_names_file_ch.collect()
 
     output:
     tuple val(chr), file("${chr}.renamed.vcf.gz") into build_minimac_ref_ch, build_beagle_ref_ch, create_eagle_bcf_ch
