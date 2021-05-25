@@ -27,6 +27,8 @@ process rename_chromosomes{
 }
 
 process create_m3vcf{
+    publishDir "${params.outdir}/m3vcf/", mode: 'copy', pattern: "*.m3vcf.gz"
+
     container = "quay.io/eqtlcatalogue/minimac3:v2.0.1"
 
     input:
@@ -42,6 +44,8 @@ process create_m3vcf{
 }
 
 process create_bref3{
+    publishDir "${params.outdir}/bref3/", mode: 'copy', pattern: "*.bref3"
+
     container = "quay.io/eqtlcatalogue/beagle52:21Apr21.304"
 
     input:
@@ -57,6 +61,8 @@ process create_bref3{
 }
 
 process create_eagle_bcf{
+    publishDir "${params.outdir}/eagle_ref/", mode: 'copy', pattern: "*.bcf"
+
     container = "quay.io/biocontainers/bcftools:1.12--h45bccc9_1"
 
     input:
