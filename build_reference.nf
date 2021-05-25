@@ -73,6 +73,6 @@ process create_eagle_bcf{
 
     script:
     """
-    bcftools view ${vch} -Ob -o ${chr}.bcf
+    bcftools view ${vcf} -Ob -o ${chr}.bcf
     """
 }
