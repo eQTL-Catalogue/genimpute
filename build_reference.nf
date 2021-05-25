@@ -18,7 +18,7 @@ process rename_chromosomes{
     file(chromsome_names) from chr_names_file_ch
 
     output:
-    tuple val(chr), file("${chr}.renamed.vcf.gz") into renamed_vcf_ch
+    tuple val(chr), file("${chr}.renamed.vcf.gz") into build_minimac_ref_ch, build_beagle_ref_ch, create_eagle_bcf_ch
 
     script:
     """
@@ -30,7 +30,7 @@ process create_m3vcf{
     container = "quay.io/eqtlcatalogue/minimac3:v2.0.1"
 
     input:
-    tuple val(chr), file(vcf) from renamed_vcf_ch
+    tuple val(chr), file(vcf) from build_minimac_ref_ch
 
     output:
     tuple val(chr), file("${chr}.m3vcf.gz") into m3vcf_ch
@@ -38,5 +38,35 @@ process create_m3vcf{
     script:
     """
     minimac3 --refHaps ${vcf} --processReference --prefix ${chr}
+    """
+}
+
+process create_bref3{
+    container = "quay.io/eqtlcatalogue/beagle52:21Apr21.304"
+
+    input:
+    tuple val(chr), file(vcf) from build_beagle_ref_ch
+
+    output:
+    tuple val(chr), file("${chr}.bref3") into bref3_ch
+
+    script:
+    """
+    zcat ${vcf} | java -jar /usr/bin/bref3.21Apr21.304.jar > ${chr}.bref3
+    """
+}
+
+process create_eagle_bcf{
+    container = "quay.io/biocontainers/bcftools:1.12--h45bccc9_1"
+
+    input:
+    tuple val(chr), file(vcf) from create_eagle_bcf_ch
+
+    output:
+    tuple val(chr), file("${chr}.bref3") into bcf_ch
+
+    script:
+    """
+    bcftools view ${vch} -Ob -o ${chr}.bcf
     """
 }
