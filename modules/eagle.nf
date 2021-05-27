@@ -2,12 +2,12 @@ process eagle_prephasing{
     container = 'quay.io/eqtlcatalogue/genimpute:v20.06.1'
 
     input:
-    tuple chromosome, file(vcf)
+    tuple val(chromosome), file(vcf)
     file eagle_genetic_map
     file phasing_reference
 
     output:
-    tuple chromosome, file("chr${chromosome}.phased.vcf.gz")
+    tuple val(chromosome), file("chr${chromosome}.phased.vcf.gz")
 
     script:
     """

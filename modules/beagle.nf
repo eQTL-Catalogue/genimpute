@@ -4,12 +4,12 @@ process beagle_imputation{
     container = "quay.io/eqtlcatalogue/beagle52:21Apr21.304"
  
     input:
-    tuple chromosome, file(vcf)
+    tuple val(chromosome), file(vcf)
     file genetic_map
     file imputation_reference
 
     output:
-    tuple chromosome, file("chr_${chromosome}.dose.vcf.gz") into imputed_vcf_cf
+    tuple val(chromosome), file("chr${chromosome}.imputed.vcf.gz")
 
     script:
     """

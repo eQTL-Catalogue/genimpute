@@ -32,6 +32,6 @@ process CrossMap_QC{
     shell:
     """
     bcftools sort ${vcf} -Oz -o ${vcf.simpleName}_QCd.vcf.gz
-    bcftools index ${vcf.simpleName}_QCd.vcf.gz
+    bcftools index -t ${vcf.simpleName}_QCd.vcf.gz
     """
 }

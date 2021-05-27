@@ -32,10 +32,10 @@ process GenotypeHarmonizer_GRCh38{
 
     script:
     """
-    java -jar /usr/bin/GenotypeHarmonizer.jar\
-     --input ${study_name_bed.baseName}\
+    java -Xmx16g -jar /usr/bin/GenotypeHarmonizer.jar\
+     --input ${input_vcf_file.simpleName}\
      --inputType VCF\
-     --ref ${vcf_file.simpleName}\
+     --ref ${ref_vcf_file.simpleName}\
      --refType VCF\
      --update-id\
      --output harmonised

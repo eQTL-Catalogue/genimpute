@@ -171,18 +171,15 @@ log.info summary.collect { k,v -> "${k.padRight(21)}: $v" }.join("\n")
 log.info "========================================="
 
 
-include { GenotypeHarmonizer_GRCh37 } from './modules/GenotypeHarmonizer'
-include { GenotypeHarmonizer_GRCh38 } from './modules/GenotypeHarmonizer'
+include { GenotypeHarmonizer_GRCh37; GenotypeHarmonizer_GRCh38 } from './modules/GenotypeHarmonizer'
 include { plink_to_vcf } from './modules/preimpute_QC'
 include { plink_to_vcf as plink_to_vcf_grch38 } from './modules/preimpute_QC'
-include { vcf_fixref } from './modules/preimpute_QC'
+include { vcf_fixref; filter_preimpute_vcf; split_by_chr } from './modules/preimpute_QC'
 include { vcf_fixref as vcf_fixref_grch38 } from './modules/preimpute_QC'
-include { filter_preimpute_vcf } from './modules/preimpute_QC'
-include { split_by_chr } from './modules/preimpute_QC'
 include { CrossMap; CrossMap_QC } from './modules/CrossMap'
 include { eagle_prephasing } from './modules/eagle'
 include { beagle_imputation } from './modules/beagle'
-
+include { filter_vcf; merge_vcf; merge_unfiltered_vcf } from './modules/postimpute_QC'
 
 workflow{
   //Convert input genotypes to GRCh38 coordinates
@@ -199,8 +196,9 @@ workflow{
   filter_preimpute_vcf(vcf_fixref_grch38.out)
 
   //Run imputation on each chromosome
-  split_by_chr(filter_preimpute_vcf.out)
+  split_by_chr(filter_preimpute_vcf.out, chromosome_ch)
   eagle_prephasing(split_by_chr.out, eagle_genetic_map_ch.collect(), phasing_ref_ch.collect())
   beagle_imputation(eagle_prephasing.out, beagle_genetic_map_ch.collect(), beagle_ref_ch.collect())
-
+  filter_vcf(beagle_imputation.out)
+  merge_vcf(filter_vcf.out[0].collect(), filter_vcf.out[1].collect())
 }
