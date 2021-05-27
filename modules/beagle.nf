@@ -1,12 +1,12 @@
-process beagle{
+process beagle_imputation{
     //publishDir "${params.outdir}/postimpute/", mode: 'copy', pattern: "*.dose.vcf.gz"
 
     container = "quay.io/eqtlcatalogue/beagle52:21Apr21.304"
  
     input:
     tuple chromosome, file(vcf)
-    file imputation_reference
     file genetic_map
+    file imputation_reference
 
     output:
     tuple chromosome, file("chr_${chromosome}.dose.vcf.gz") into imputed_vcf_cf

@@ -10,7 +10,7 @@ process GenotypeHarmonizer_GRCh37{
 
     script:
     """
-    java -jar /usr/bin/GenotypeHarmonizer.jar\
+    java -Xmx16g -jar /usr/bin/GenotypeHarmonizer.jar\
      --input ${study_name_bed.baseName}\
      --inputType PLINK_BED\
      --ref ${vcf_file.simpleName}\

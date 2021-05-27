@@ -13,7 +13,7 @@ process eagle_prephasing{
     """
     bcftools index ${vcf}
     eagle --vcfTarget=${vcf} \
-    --vcfRef=ALL.chr${chromosome}.phase3_integrated.20130502.genotypes.bcf \
+    --vcfRef=chr${chromosome}.bcf \
     --geneticMapFile=${eagle_genetic_map} \
     --chrom=${chromosome} \
     --outPrefix=chr${chromosome}.phased \
