@@ -18,7 +18,7 @@ process rename_chromosomes{
     file(chromsome_names) from chr_names_file_ch.collect()
 
     output:
-    tuple val(chr), file("${chr}.renamed.vcf.gz") into build_minimac_ref_ch, build_beagle_ref_ch, create_eagle_bcf_ch
+    tuple val(chr), file("${chr}.renamed.vcf.gz") into build_minimac_ref_ch, build_beagle_ref_ch, create_eagle_bcf_ch, extract_var_info_ch
 
     script:
     """
@@ -30,6 +30,9 @@ process create_m3vcf{
     publishDir "${params.outdir}/m3vcf/", mode: 'copy', pattern: "*.m3vcf.gz"
 
     container = "quay.io/eqtlcatalogue/minimac3:v2.0.1"
+
+    when:
+    params.m3vcf
 
     input:
     tuple val(chr), file(vcf) from build_minimac_ref_ch
@@ -61,7 +64,7 @@ process create_bref3{
 }
 
 process create_eagle_bcf{
-    publishDir "${params.outdir}/eagle_ref/", mode: 'copy', pattern: "*.bcf"
+    publishDir "${params.outdir}/eagle_ref/", mode: 'copy', pattern: "chr*"
 
     container = "quay.io/biocontainers/bcftools:1.12--h45bccc9_1"
 
@@ -69,10 +72,30 @@ process create_eagle_bcf{
     tuple val(chr), file(vcf) from create_eagle_bcf_ch
 
     output:
-    tuple val(chr), file("${chr}.bcf") into bcf_ch
+    tuple val(chr), file("${chr}.bcf"), file("${chr}.bcf.csi") into bcf_ch
 
     script:
     """
     bcftools view ${vcf} -Ob -o ${chr}.bcf
+    bcftools index ${chr}.bcf
     """
 }
+
+process extract_variant_information{
+    publishDir "${params.outdir}/variant_info/", mode: 'copy', pattern: "*.vcf.gz"
+
+    container = "quay.io/biocontainers/bcftools:1.12--h45bccc9_1"
+
+    input:
+    tuple val(chr), file(vcf) from extract_var_info_ch
+
+    output:
+    tuple val(chr), file("${chr}_var_info.vcf.gz") into var_info_ch
+
+    script:
+    """
+    zcat ${vcf} | cut -f 1-8 | bgzip > ${chr}_var_info.vcf.gz
+    """
+}
+
+
