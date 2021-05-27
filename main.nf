@@ -67,36 +67,18 @@ Channel
     .map { study -> [file("${study}.bed"), file("${study}.bim"), file("${study}.fam")]}
     .set { bfile_ch }
 
+// Reference panels
 Channel
     .from(params.grch37_ref_panel)
     .map { ref -> [file("${ref}.vcf.gz"), file("${ref}.vcf.gz.tbi")]}
-    .into { grch37_ref_panel_ch} 
+    .set { grch37_ref_panel_ch} 
 
 Channel
     .from(params.grch38_ref_panel)
     .map { ref -> [file("${ref}.vcf.gz"), file("${ref}.vcf.gz.tbi")]}
-    .into { grch38_ref_panel_ch} 
+    .set { grch38_ref_panel_ch} 
 
-Channel
-    .fromPath( "${params.eagle_phasing_reference}*" )
-    .ifEmpty { exit 1, "Eagle phasing reference not found: ${params.eagle_phasing_reference}" }
-    .set { phasing_ref_ch }
-
-Channel
-    .fromPath( "${params.minimac_imputation_reference}*" )
-    .ifEmpty { exit 1, "Minimac4 imputation reference not found: ${params.minimac_imputation_reference}" }
-    .set { imputation_ref_ch }
-
-Channel
-    .fromPath(params.eagle_genetic_map)
-    .ifEmpty { exit 1, "Eagle genetic map file not found: ${params.eagle_genetic_map}" } 
-    .set { genetic_map_ch }
-
-Channel
-    .fromPath(params.chain_file)
-    .ifEmpty { exit 1, "CrossMap.py chain file not found: ${params.chain_file}" } 
-    .set { chain_file_ch }
-
+//Reference genomes
 Channel
     .fromPath(params.grch37_ref_genome)
     .ifEmpty { exit 1, "GRCh38 reference genome file not found: ${params.grch37_ref_genome}" } 
@@ -107,10 +89,41 @@ Channel
     .ifEmpty { exit 1, "GRCh38 reference genome file not found: ${params.grch38_ref_genome}" } 
     .set { grch38_genome_ch }
 
+// Eagle
+Channel
+    .fromPath(params.eagle_genetic_map)
+    .ifEmpty { exit 1, "Eagle genetic map file not found: ${params.eagle_genetic_map}" } 
+    .set { eagle_genetic_map_ch }
+
+Channel
+    .fromPath( "${params.eagle_phasing_reference}*" )
+    .ifEmpty { exit 1, "Eagle phasing reference not found: ${params.eagle_phasing_reference}" }
+    .set { phasing_ref_ch }
+
+// Minimac4
+Channel
+    .fromPath( "${params.minimac_imputation_reference}*" )
+    .ifEmpty { exit 1, "Minimac4 imputation reference not found: ${params.minimac_imputation_reference}" }
+    .set { minimac_ref_ch }
+
+// Beagle
 Channel
     .fromPath( "${params.beagle_genetic_map}*" )
     .ifEmpty { exit 1, "Beagle genetic map not found: ${params.eagle_phasing_reference}" }
     .set { beagle_genetic_map_ch }
+Channel
+    .fromPath( "${params.beagle_imputation_reference}*" )
+    .ifEmpty { exit 1, "Beagle imputation reference not found: ${params.beagle_imputation_reference}" }
+    .set { beagle_ref_ch }
+
+// CrossMap
+Channel
+    .fromPath(params.chain_file)
+    .ifEmpty { exit 1, "CrossMap.py chain file not found: ${params.chain_file}" } 
+    .set { chain_file_ch }
+
+//Chromsome channel
+chromosome_ch = Channel.from(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22)
 
 // Header log info
 log.info """=======================================================
@@ -164,15 +177,30 @@ include { plink_to_vcf } from './modules/preimpute_QC'
 include { plink_to_vcf as plink_to_vcf_grch38 } from './modules/preimpute_QC'
 include { vcf_fixref } from './modules/preimpute_QC'
 include { vcf_fixref as vcf_fixref_grch38 } from './modules/preimpute_QC'
+include { filter_preimpute_vcf } from './modules/preimpute_QC'
+include { split_by_chr } from './modules/preimpute_QC'
+include { CrossMap; CrossMap_QC } from './modules/CrossMap'
+include { eagle_prephasing } from './modules/eagle'
+include { beagle_imputation } from './modules/beagle'
 
 
 workflow{
-    GenotypeHarmonizer_GRCh37(bfile_ch, grch37_ref_panel_ch.collect())
-    plink_to_vcf(GenotypeHarmonizer_GRCh37.out)
-    vcf_fixref(plink_to_vcf.out, grch37_genome_ch.collect(), grch37_ref_panel_ch.collect())
-    CrossMap(vcf_fixref.out, chain_file_ch.collect(), grch38_genome_ch.collect())
-    CrossMap_QC(CrossMap.out)
-    GenotypeHarmonizer_GRCh38(CrossMap_QC.out, grch38_ref_panel_ch.collect())
-    plink_to_vcf_grch38(GenotypeHarmonizer_GRCh38.out)
-    vcf_fixref_grch38(plink_to_vcf_grch38.out, grch38_genome_ch.collect(), grch38_ref_panel_ch.collect())
+  //Convert input genotypes to GRCh38 coordinates
+  GenotypeHarmonizer_GRCh37(bfile_ch, grch37_ref_panel_ch.collect())
+  plink_to_vcf(GenotypeHarmonizer_GRCh37.out)
+  vcf_fixref(plink_to_vcf.out, grch37_genome_ch.collect(), grch37_ref_panel_ch.collect())
+  CrossMap(vcf_fixref.out, chain_file_ch.collect(), grch38_genome_ch.collect())
+  CrossMap_QC(CrossMap.out)
+  
+  //Perform pre-imputation QC
+  GenotypeHarmonizer_GRCh38(CrossMap_QC.out, grch38_ref_panel_ch.collect())
+  plink_to_vcf_grch38(GenotypeHarmonizer_GRCh38.out)
+  vcf_fixref_grch38(plink_to_vcf_grch38.out, grch38_genome_ch.collect(), grch38_ref_panel_ch.collect())
+  filter_preimpute_vcf(vcf_fixref_grch38.out)
+
+  //Run imputation on each chromosome
+  split_by_chr(filter_preimpute_vcf.out)
+  eagle_prephasing(split_by_chr.out, eagle_genetic_map_ch.collect(), phasing_ref_ch.collect())
+  beagle_imputation(eagle_prephasing.out, beagle_genetic_map_ch.collect(), beagle_ref_ch.collect())
+
 }
