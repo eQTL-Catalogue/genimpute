@@ -1,5 +1,5 @@
 process beagle_imputation{
-    //publishDir "${params.outdir}/postimpute/", mode: 'copy', pattern: "*.dose.vcf.gz"
+    publishDir "${params.outdir}/beagle_out/by_chr/", mode: 'copy', pattern: "*.imputed.vcf.gz"
 
     container = "quay.io/eqtlcatalogue/beagle52:21Apr21.304"
  
