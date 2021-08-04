@@ -74,10 +74,6 @@ Channel
     .set { bfile_ch }
 
 // Reference panels
-Channel
-    .from(params.grch37_ref_panel)
-    .map { ref -> [file("${ref}.vcf.gz"), file("${ref}.vcf.gz.tbi")]}
-    .set { grch37_ref_panel_ch} 
 
 Channel
     .from(params.grch38_ref_panel)
@@ -85,11 +81,6 @@ Channel
     .set { grch38_ref_panel_ch} 
 
 //Reference genomes
-Channel
-    .fromPath(params.grch37_ref_genome)
-    .ifEmpty { exit 1, "GRCh38 reference genome file not found: ${params.grch37_ref_genome}" } 
-    .set { grch37_genome_ch }
-
 Channel
     .fromPath(params.grch38_ref_genome)
     .ifEmpty { exit 1, "GRCh38 reference genome file not found: ${params.grch38_ref_genome}" } 
@@ -146,15 +137,14 @@ summary['Pipeline Name']            = 'eQTL-Catalogue/genimpute'
 summary['Pipeline Version']         = workflow.manifest.version
 summary['Run Name']                 = custom_runName ?: workflow.runName
 summary['PLINK bfile']              = params.bfile
-summary['Reference genome']         = params.ref_genome
+summary['Reference genome']         = params.grch38_ref_genome
 summary['Harmonise genotypes']      = params.harmonise_genotypes
-summary['Harmonisation ref panel']  = params.ref_panel
+summary['Harmonisation ref panel']  = params.grch38_ref_panel
 summary['Eagle genetic map']        = params.eagle_genetic_map
 summary['Eagle reference panel']    = params.eagle_phasing_reference
 summary['Impute PAR']               = params.impute_PAR
 summary['Impute non-PAR']           = params.impute_non_PAR
 summary['Minimac4 reference panel'] = params.minimac_imputation_reference
-summary['CrossMap reference genome'] = params.target_ref
 summary['CrossMap chain file']      = params.chain_file
 summary['R2 thresh']                = params.chain_file
 summary['Max Memory']               = params.max_memory
