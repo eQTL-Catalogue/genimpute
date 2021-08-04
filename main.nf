@@ -30,8 +30,14 @@ def helpMessage() {
     Phasing & Imputation:
       --eagle_genetic_map           Eagle genetic map file
       --eagle_phasing_reference     Phasing reference panel for Eagle (typically 1000 Genomes Phase 3)
+      --impute_PAR                  Whether or not to impute the PAR region
+      --impute_non_PAR              Whether or not to impute the non-PAR region
       --minimac_imputation_reference Imputation reference panel for Minimac4 in M3VCF format (typically 1000 Genomes Phase 3)
       --r2_thresh                   Imputation quality score threshold for filtering poorly imputed variants
+
+    Annotation:
+      --annotation_file_23_to_X     Annotation file for bcftools
+      --annotation_file_X_to_23     Annotation file for bcftools
 
     CrossMap.py:
       --target_ref                  Reference genome fasta file for the target genome assembly (e.g. GRCh38)
@@ -48,7 +54,7 @@ def helpMessage() {
     """.stripIndent()
 }
 
-// Show help emssage
+// Show help message
 if (params.help){
     helpMessage()
     exit 0
@@ -106,24 +112,25 @@ Channel
     .ifEmpty { exit 1, "Minimac4 imputation reference not found: ${params.minimac_imputation_reference}" }
     .set { minimac_ref_ch }
 
-// Beagle
-Channel
-    .fromPath( "${params.beagle_genetic_map}*" )
-    .ifEmpty { exit 1, "Beagle genetic map not found: ${params.eagle_phasing_reference}" }
-    .set { beagle_genetic_map_ch }
-Channel
-    .fromPath( "${params.beagle_imputation_reference}*" )
-    .ifEmpty { exit 1, "Beagle imputation reference not found: ${params.beagle_imputation_reference}" }
-    .set { beagle_ref_ch }
-
 // CrossMap
 Channel
     .fromPath(params.chain_file)
     .ifEmpty { exit 1, "CrossMap.py chain file not found: ${params.chain_file}" } 
     .set { chain_file_ch }
 
-//Chromsome channel
-chromosome_ch = Channel.from(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22)
+// bcftools annotation
+Channel
+    .fromPath(params.annotation_file_23_to_X)
+    .ifEmpty { exit 1, "Chromosome annotation file not found: ${params.annotation_file_23_to_X}" }
+    .set { annotation_file_23_to_X_ch }
+
+
+
+//Chromosome channel
+if (params.impute_PAR)
+  chromosome_ch = Channel.from(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,"X")
+else
+  chromosome_ch = Channel.from(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22)
 
 // Header log info
 log.info """=======================================================
@@ -144,10 +151,12 @@ summary['Harmonise genotypes']      = params.harmonise_genotypes
 summary['Harmonisation ref panel']  = params.ref_panel
 summary['Eagle genetic map']        = params.eagle_genetic_map
 summary['Eagle reference panel']    = params.eagle_phasing_reference
+summary['Impute PAR']               = params.impute_PAR
+summary['Impute non-PAR']           = params.impute_non_PAR
 summary['Minimac4 reference panel'] = params.minimac_imputation_reference
 summary['CrossMap reference genome'] = params.target_ref
 summary['CrossMap chain file']      = params.chain_file
-summary['R2 thresh']      = params.chain_file
+summary['R2 thresh']                = params.chain_file
 summary['Max Memory']               = params.max_memory
 summary['Max CPUs']                 = params.max_cpus
 summary['Max Time']                 = params.max_time
@@ -171,34 +180,75 @@ log.info summary.collect { k,v -> "${k.padRight(21)}: $v" }.join("\n")
 log.info "========================================="
 
 
-include { GenotypeHarmonizer_GRCh37; GenotypeHarmonizer_GRCh38 } from './modules/GenotypeHarmonizer'
-include { plink_to_vcf } from './modules/preimpute_QC'
-include { plink_to_vcf as plink_to_vcf_grch38 } from './modules/preimpute_QC'
+include { GenotypeHarmonizer } from './modules/GenotypeHarmonizer'
+include { plink_to_vcf; vcf_to_plink } from './modules/preimpute_QC'
 include { vcf_fixref; filter_preimpute_vcf; split_by_chr } from './modules/preimpute_QC'
-include { vcf_fixref as vcf_fixref_grch38 } from './modules/preimpute_QC'
+include { annotate } from './modules/preimpute_QC'
 include { CrossMap; CrossMap_QC } from './modules/CrossMap'
 include { eagle_prephasing } from './modules/eagle'
-include { beagle_imputation } from './modules/beagle'
-include { filter_vcf; merge_vcf; merge_unfiltered_vcf } from './modules/postimpute_QC'
+include { minimac_imputation } from './modules/minimac'
+include { filter_vcf; merge_unfiltered_vcf } from './modules/postimpute_QC'
+include { initial_filter; preimpute_filter; female_qc; impute_sex; extract_female_samples; split_male_female_dosage; double_male_dosage; merge_male_female} from './modules/impute_non_PAR.nf'
 
-workflow{
-  //Convert input genotypes to GRCh38 coordinates
-  GenotypeHarmonizer_GRCh37(bfile_ch, grch37_ref_panel_ch.collect())
-  plink_to_vcf(GenotypeHarmonizer_GRCh37.out)
-  vcf_fixref(plink_to_vcf.out, grch37_genome_ch.collect(), grch37_ref_panel_ch.collect())
-  CrossMap(vcf_fixref.out, chain_file_ch.collect(), grch38_genome_ch.collect())
-  CrossMap_QC(CrossMap.out)
+workflow main_flow{
+  take:
+    bfile
   
-  //Perform pre-imputation QC
-  GenotypeHarmonizer_GRCh38(CrossMap_QC.out, grch38_ref_panel_ch.collect())
-  plink_to_vcf_grch38(GenotypeHarmonizer_GRCh38.out)
-  vcf_fixref_grch38(plink_to_vcf_grch38.out, grch38_genome_ch.collect(), grch38_ref_panel_ch.collect())
-  filter_preimpute_vcf(vcf_fixref_grch38.out)
+  main:
+  //Convert input genotypes to GRCh38 coordinates
+  CrossMap(bfile, chain_file_ch.collect())
+  GenotypeHarmonizer(CrossMap.out, grch38_ref_panel_ch.collect())
+  plink_to_vcf(GenotypeHarmonizer.out)
+  annotate(plink_to_vcf.out, annotation_file_23_to_X_ch.collect())
+  vcf_fixref(annotate.out, grch38_genome_ch.collect(), grch38_ref_panel_ch.collect())
+  filter_preimpute_vcf(vcf_fixref.out)
 
   //Run imputation on each chromosome
-  split_by_chr(filter_preimpute_vcf.out, chromosome_ch)
+  split_by_chr(filter_preimpute_vcf.out, chromosome_ch)  
   eagle_prephasing(split_by_chr.out, eagle_genetic_map_ch.collect(), phasing_ref_ch.collect())
-  beagle_imputation(eagle_prephasing.out, beagle_genetic_map_ch.collect(), beagle_ref_ch.collect())
-  filter_vcf(beagle_imputation.out)
-  merge_vcf(filter_vcf.out[0].collect(), filter_vcf.out[1].collect())
+  minimac_imputation(eagle_prephasing.out, minimac_ref_ch.collect())
+
+  emit:
+  minimac_imputation.out[0]
+  minimac_imputation.out[1]
+  
+}
+
+workflow impute_non_PAR{
+  take:
+    bfile
+
+  main:
+  impute_sex(bfile)
+  extract_female_samples(impute_sex.out)
+  CrossMap(impute_sex.out, chain_file_ch.collect())
+  GenotypeHarmonizer(CrossMap.out, grch38_ref_panel_ch.collect())
+  plink_to_vcf(GenotypeHarmonizer.out)
+  annotate(plink_to_vcf.out, annotation_file_23_to_X_ch.collect())
+  vcf_fixref(annotate.out, grch38_genome_ch.collect(), grch38_ref_panel_ch.collect())
+  initial_filter(vcf_fixref.out)
+  female_qc(extract_female_samples.out[0], initial_filter.out)
+  preimpute_filter(female_qc.out, initial_filter.out)
+  eagle_prephasing(preimpute_filter.out, eagle_genetic_map_ch.collect(), Channel.fromPath(params.eagle_phasing_reference + '/NonPAR/chrX.bcf*').collect())
+  minimac_imputation(eagle_prephasing.out, file(params.minimac_imputation_reference + '/NonPAR/chrX.m3vcf.gz'))
+  split_male_female_dosage(minimac_imputation.out, extract_female_samples.out[0], extract_female_samples.out[1])
+  double_male_dosage(split_male_female_dosage.out[0])
+  merge_male_female(double_male_dosage.out, split_male_female_dosage.out[1])
+
+  emit:
+  merge_male_female.out[0]
+  merge_male_female.out[1]
+}
+
+workflow {
+  if (params.impute_non_PAR){
+    impute_non_PAR(bfile_ch)
+    main_flow(bfile_ch)
+    merge_unfiltered_vcf(main_flow.out[0].concat(impute_non_PAR.out[0]).collect(), main_flow.out[1].concat(impute_non_PAR.out[1]).collect())
+  }
+  else{
+    main_flow(bfile_ch)
+    merge_unfiltered_vcf(main_flow.out[0].collect(), main_flow.out[1].collect())
+  }
+    filter_vcf(merge_unfiltered_vcf.out)
 }

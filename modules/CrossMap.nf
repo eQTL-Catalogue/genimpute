@@ -1,22 +1,25 @@
 process CrossMap{
     container = 'quay.io/eqtlcatalogue/genimpute:v20.06.1'
-    
+
     input:
-    file vcf
+    tuple file(bed), file(bim), file(fam)
     file chain_file
-    file target_ref
 
     output:
-    file "${vcf.simpleName}_mapped.vcf.gz"
+    tuple file("crossmapped_plink.bed"), file("crossmapped_plink.bim"), file("crossmapped_plink.fam")
 
-    shell:
+    shell: 
+    //Converts BIM to BED and converts the BED file via CrossMap. 
+    //Finds excluded SNPs and removes them from the original plink file. 
+    //Then replaces the BIM with CrossMap's output.
     """
-    #Exlcude structural variants, beause they break latest version of CrossMap.py
-    bcftools view --exclude-types other ${vcf} -Oz -o ${vcf.simpleName}_noSVs.vcf.gz
-    
-    #Run CrossMap.py
-    CrossMap.py vcf ${chain_file} ${vcf.simpleName}_noSVs.vcf.gz ${target_ref} ${vcf.simpleName}_mapped.vcf
-    bgzip ${vcf.simpleName}_mapped.vcf
+    awk '{print \$1,\$4,\$4+1,\$2,\$5,\$6,\$2 "_" \$5 "_" \$6}' ${bed.simpleName}.bim > crossmap_input.bed
+    CrossMap.py bed ${chain_file} crossmap_input.bed crossmap_output.bed
+    awk '{print \$7}' crossmap_input.bed | sort > input_ids.txt
+    awk '{print \$7}' crossmap_output.bed | sort > output_ids.txt
+    comm -23 input_ids.txt output_ids.txt | awk '{split(\$0,a,"_"); print a[1]}' > excluded_ids.txt
+    plink2 --bfile ${bed.simpleName} --exclude excluded_ids.txt --make-bed --output-chr MT --out crossmapped_plink
+    awk -F'\t' 'BEGIN {OFS=FS} {print \$1,\$4,0,\$2,\$5,\$6}' crossmap_output.bed > crossmapped_plink.bim
     """
 }
 

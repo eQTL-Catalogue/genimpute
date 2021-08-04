@@ -1,23 +1,25 @@
 process filter_vcf{
-    container = 'quay.io/eqtlcatalogue/genimpute:v20.06.1'
+  publishDir "${params.outdir}/minimac_out/filtered", mode: 'copy', pattern: "*.vcf.gz"
+  container = 'quay.io/eqtlcatalogue/genimpute:v20.06.1'
 
     input:
-    tuple val(chromosome), file(vcf)
+    file(vcf)
+    file(index)
 
     output:
-      file("${vcf.simpleName}_filtered.vcf.gz")
-      file("${vcf.simpleName}_filtered.vcf.gz.csi")
+    file("${params.output_name}_filtered.vcf.gz")
+    file("${params.output_name}_filtered.vcf.gz.csi")
 
     shell:
     """
-    bcftools filter -i 'INFO/DR2 > ${params.r2_thresh}' ${vcf} | \
-      bcftools filter -i 'MAF[0] > 0.01' -Oz -o ${vcf.simpleName}_filtered.vcf.gz
-    bcftools index ${vcf.simpleName}_filtered.vcf.gz
+    bcftools filter -i 'INFO/R2 > ${params.r2_thresh}' ${vcf} | \
+      bcftools filter -i 'MAF[0] > 0.01' -Oz -o ${params.output_name}_filtered.vcf.gz
+    bcftools index ${params.output_name}_filtered.vcf.gz
     """
 }
 
-process merge_vcf{
-    publishDir "${params.outdir}/beagle_out/", mode: 'copy', pattern: "*.vcf.gz"
+process merge_unfiltered_vcf{
+    publishDir "${params.outdir}/minimac_out/unfiltered", mode: 'copy', pattern: "*.vcf.gz"
     container = 'quay.io/eqtlcatalogue/genimpute:v20.06.1'
 
     input:
@@ -25,26 +27,14 @@ process merge_vcf{
     file indices
 
     output:
-    file "${params.output_name}.MAF001.vcf.gz"
+    file("${params.output_name}.all_variants.vcf.gz")
+    file("${params.output_name}.all_variants.vcf.gz.csi")
+
 
     shell:
     """
-    bcftools concat ${input_files.join(' ')} | bcftools sort -Oz -o ${params.output_name}.MAF001.vcf.gz
-    """
-}
-
-process merge_unfiltered_vcf{
-    publishDir "${params.outdir}/beagle_out/", mode: 'copy', pattern: "*.vcf.gz"
-    container = 'quay.io/eqtlcatalogue/genimpute:v20.06.1'
-
-    input:
-    file input_files
-
-    output:
-    file "${params.output_name}.all_variants.vcf.gz"
-
-    shell:
-    """
-    bcftools concat ${input_files.join(' ')} | bcftools sort -Oz -o ${params.output_name}.all_variants.vcf.gz
+    bcftools concat ${input_files.join(' ')} -a -Ou | \
+    bcftools sort -Oz -o ${params.output_name}.all_variants.vcf.gz
+    bcftools index ${params.output_name}.all_variants.vcf.gz
     """
 }

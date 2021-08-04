@@ -1,19 +1,24 @@
 process minimac_imputation{
     publishDir "${params.outdir}/postimpute/", mode: 'copy', pattern: "*.dose.vcf.gz"
  
+    container = 'quay.io/eqtlcatalogue/genimpute:v20.06.1'
+
     input:
-    set chromosome, file(vcf) from phased_vcf_cf
-    file imputation_reference from imputation_ref_ch.collect()
+    tuple val(chromosome), file(vcf)
+    file imputation_reference
 
     output:
-    tuple chromosome, file("chr_${chromosome}.dose.vcf.gz") into imputed_vcf_cf
+    file("chr_${chromosome}.dose.vcf.gz")
+    file("chr_${chromosome}.dose.vcf.gz.csi")
 
     script:
     """
-    minimac4 --refHaps ${chromosome}.1000g.Phase3.v5.With.Parameter.Estimates.m3vcf.gz \
+    minimac4 --refHaps chr${chromosome}.m3vcf.gz \
     --haps ${vcf} \
     --prefix chr_${chromosome} \
     --format GT,DS,GP \
-    --noPhoneHome
+    --noPhoneHome \
+    --minRatio 0.05
+    bcftools index chr_${chromosome}.dose.vcf.gz
     """
 }
