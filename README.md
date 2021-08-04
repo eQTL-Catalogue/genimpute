@@ -20,6 +20,7 @@ Genotype imputation and quality control workflow used by the eQTL Catalogue. Per
 ## Input parameters
 
 **--bfile**
+
 Raw genotypes in PLINK format (bed, bim, fam). Assumed to be in GRCh37 coordinates.  Genotypes in VCF format can be converted to PLINK format with:
 
 ```bash
