@@ -1,5 +1,5 @@
 process filter_vcf{
-  publishDir "${params.outdir}/minimac_out/filtered", mode: 'copy', pattern: "*.vcf.gz"
+  publishDir "${params.outdir}/minimac_out/filtered", mode: 'copy', pattern: "*.vcf.gz*"
   container = 'quay.io/eqtlcatalogue/genimpute:v20.06.1'
 
     input:
@@ -19,7 +19,7 @@ process filter_vcf{
 }
 
 process merge_unfiltered_vcf{
-    publishDir "${params.outdir}/minimac_out/unfiltered", mode: 'copy', pattern: "*.vcf.gz"
+    publishDir "${params.outdir}/minimac_out/unfiltered", mode: 'copy', pattern: "*.vcf.gz*"
     container = 'quay.io/eqtlcatalogue/genimpute:v20.06.1'
 
     input:
@@ -34,6 +34,7 @@ process merge_unfiltered_vcf{
     shell:
     """
     bcftools concat ${input_files.join(' ')} -a -Ou | \
+    bcftools annotate --set-id 'chr%CHROM\\_%POS\\_%REF\\_%FIRST_ALT' | \
     bcftools sort -Oz -o ${params.output_name}.all_variants.vcf.gz
     bcftools index ${params.output_name}.all_variants.vcf.gz
     """
