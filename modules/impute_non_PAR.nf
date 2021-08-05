@@ -32,8 +32,8 @@ process extract_female_samples{
     """
     plink2 --bfile ${bed.baseName} --filter-females --make-bed --out females_only
     plink2 --bfile ${bed.baseName} --filter-males --make-bed --out males_only
-    cut -f1 -d' ' females_only.fam > female_samples.txt
-    cut -f1 -d' ' males_only.fam > male_samples.txt
+    cut -f2 -d' ' females_only.fam > female_samples.txt
+    cut -f2 -d' ' males_only.fam > male_samples.txt
     """
 }
 
