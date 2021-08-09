@@ -14,7 +14,6 @@ process impute_sex{
     plink2 --bfile chr23 --split-x b37 no-fail --make-bed --out split_x
     plink2 --bfile split_x --chr 23 --make-bed --out chr23_nonPAR
     plink2 --bfile chr23_nonPAR --make-bed --set-hh-missing --output-chr MT --out chr23_noHET
-    
     """
 }
 
@@ -30,6 +29,8 @@ process extract_female_samples{
     
     script:
     """
+    zerocount=\$(awk 'BEGIN{count=0;} {if(\$5==0)count+=1} END{print count}' ${bed.baseName}.fam)
+    if [ \$zerocount -ne 0 ]; then echo "ERROR: .fam file contains ambiguous sexes!"; exit 1; fi
     plink2 --bfile ${bed.baseName} --filter-females --make-bed --out females_only
     plink2 --bfile ${bed.baseName} --filter-males --make-bed --out males_only
     cut -f2 -d' ' females_only.fam > female_samples.txt
