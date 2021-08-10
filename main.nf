@@ -1,3 +1,5 @@
+nextflow.enable.dsl=2
+
 def helpMessage() {
     log.info"""
     =======================================================
@@ -28,8 +30,14 @@ def helpMessage() {
     Phasing & Imputation:
       --eagle_genetic_map           Eagle genetic map file
       --eagle_phasing_reference     Phasing reference panel for Eagle (typically 1000 Genomes Phase 3)
+      --impute_PAR                  Whether or not to impute the PAR region
+      --impute_non_PAR              Whether or not to impute the non-PAR region
       --minimac_imputation_reference Imputation reference panel for Minimac4 in M3VCF format (typically 1000 Genomes Phase 3)
       --r2_thresh                   Imputation quality score threshold for filtering poorly imputed variants
+
+    Annotation:
+      --annotation_file_23_to_X     Annotation file for bcftools
+      --annotation_file_X_to_23     Annotation file for bcftools
 
     CrossMap.py:
       --target_ref                  Reference genome fasta file for the target genome assembly (e.g. GRCh38)
@@ -46,7 +54,7 @@ def helpMessage() {
     """.stripIndent()
 }
 
-// Show help emssage
+// Show help message
 if (params.help){
     helpMessage()
     exit 0
@@ -59,47 +67,61 @@ if( !(workflow.runName ==~ /[a-z]+_[a-z]+/) ){
   custom_runName = workflow.runName
 }
 
-
 // Define input channels
-Channel
-    .fromPath(params.ref_genome)
-    .ifEmpty { exit 1, "Reference genome fasta file not found: ${params.ref_genome}" } 
-    .set { ref_genome_ch }
-
 Channel
     .from(params.bfile)
     .map { study -> [file("${study}.bed"), file("${study}.bim"), file("${study}.fam")]}
     .set { bfile_ch }
 
+// Reference panels
+
 Channel
-    .from(params.ref_panel)
+    .from(params.grch38_ref_panel)
     .map { ref -> [file("${ref}.vcf.gz"), file("${ref}.vcf.gz.tbi")]}
-    .into { ref_panel_harmonise_genotypes; ref_panel_vcf_fixref } 
+    .set { grch38_ref_panel_ch} 
+
+//Reference genomes
+Channel
+    .fromPath(params.grch38_ref_genome)
+    .ifEmpty { exit 1, "GRCh38 reference genome file not found: ${params.grch38_ref_genome}" } 
+    .set { grch38_genome_ch }
+
+// Eagle
+Channel
+    .fromPath(params.eagle_genetic_map)
+    .ifEmpty { exit 1, "Eagle genetic map file not found: ${params.eagle_genetic_map}" } 
+    .set { eagle_genetic_map_ch }
 
 Channel
     .fromPath( "${params.eagle_phasing_reference}*" )
     .ifEmpty { exit 1, "Eagle phasing reference not found: ${params.eagle_phasing_reference}" }
     .set { phasing_ref_ch }
 
+// Minimac4
 Channel
     .fromPath( "${params.minimac_imputation_reference}*" )
     .ifEmpty { exit 1, "Minimac4 imputation reference not found: ${params.minimac_imputation_reference}" }
-    .set { imputation_ref_ch }
+    .set { minimac_ref_ch }
 
-Channel
-    .fromPath(params.eagle_genetic_map)
-    .ifEmpty { exit 1, "Eagle genetic map file not found: ${params.eagle_genetic_map}" } 
-    .set { genetic_map_ch }
-
+// CrossMap
 Channel
     .fromPath(params.chain_file)
     .ifEmpty { exit 1, "CrossMap.py chain file not found: ${params.chain_file}" } 
     .set { chain_file_ch }
 
+// bcftools annotation
 Channel
-    .fromPath(params.target_ref)
-    .ifEmpty { exit 1, "CrossMap.py target reference genome file: ${params.target_ref}" } 
-    .set { target_ref_ch }
+    .fromPath(params.annotation_file_23_to_X)
+    .ifEmpty { exit 1, "Chromosome annotation file not found: ${params.annotation_file_23_to_X}" }
+    .set { annotation_file_23_to_X_ch }
+
+
+
+//Chromosome channel
+if (params.impute_PAR)
+  chromosome_ch = Channel.from(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,"X")
+else
+  chromosome_ch = Channel.from(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22)
 
 // Header log info
 log.info """=======================================================
@@ -115,15 +137,16 @@ summary['Pipeline Name']            = 'eQTL-Catalogue/genimpute'
 summary['Pipeline Version']         = workflow.manifest.version
 summary['Run Name']                 = custom_runName ?: workflow.runName
 summary['PLINK bfile']              = params.bfile
-summary['Reference genome']         = params.ref_genome
+summary['Reference genome']         = params.grch38_ref_genome
 summary['Harmonise genotypes']      = params.harmonise_genotypes
-summary['Harmonisation ref panel']  = params.ref_panel
+summary['Harmonisation ref panel']  = params.grch38_ref_panel
 summary['Eagle genetic map']        = params.eagle_genetic_map
 summary['Eagle reference panel']    = params.eagle_phasing_reference
+summary['Impute PAR']               = params.impute_PAR
+summary['Impute non-PAR']           = params.impute_non_PAR
 summary['Minimac4 reference panel'] = params.minimac_imputation_reference
-summary['CrossMap reference genome'] = params.target_ref
 summary['CrossMap chain file']      = params.chain_file
-summary['R2 thresh']      = params.chain_file
+summary['R2 thresh']                = params.chain_file
 summary['Max Memory']               = params.max_memory
 summary['Max CPUs']                 = params.max_cpus
 summary['Max Time']                 = params.max_time
@@ -147,254 +170,75 @@ log.info summary.collect { k,v -> "${k.padRight(21)}: $v" }.join("\n")
 log.info "========================================="
 
 
-if( workflow.profile == 'awsbatch') {
-  // AWSBatch sanity checking
-  if (!params.awsqueue || !params.awsregion) exit 1, "Specify correct --awsqueue and --awsregion parameters on AWSBatch!"
-  if (!workflow.workDir.startsWith('s3') || !params.outdir.startsWith('s3')) exit 1, "Specify S3 URLs for workDir and outdir parameters on AWSBatch!"
-  // Check workDir/outdir paths to be S3 buckets if running on AWSBatch
-  // related: https://github.com/nextflow-io/nextflow/issues/813
-  if (!workflow.workDir.startsWith('s3:') || !params.outdir.startsWith('s3:')) exit 1, "Workdir or Outdir not on S3 - specify S3 Buckets for each to run on AWSBatch!"
+include { GenotypeHarmonizer } from './modules/GenotypeHarmonizer'
+include { plink_to_vcf; vcf_to_plink } from './modules/preimpute_QC'
+include { vcf_fixref; filter_preimpute_vcf; split_by_chr } from './modules/preimpute_QC'
+include { annotate } from './modules/preimpute_QC'
+include { CrossMap; CrossMap_QC } from './modules/CrossMap'
+include { eagle_prephasing } from './modules/eagle'
+include { minimac_imputation } from './modules/minimac'
+include { filter_vcf; merge_unfiltered_vcf } from './modules/postimpute_QC'
+include { initial_filter; preimpute_filter; female_qc; impute_sex; extract_female_samples; split_male_female_dosage; double_male_dosage; merge_male_female} from './modules/impute_non_PAR.nf'
+
+workflow main_flow{
+  take:
+    bfile
+  
+  main:
+  //Convert input genotypes to GRCh38 coordinates
+  CrossMap(bfile, chain_file_ch.collect())
+  GenotypeHarmonizer(CrossMap.out, grch38_ref_panel_ch.collect())
+  plink_to_vcf(GenotypeHarmonizer.out)
+  annotate(plink_to_vcf.out, annotation_file_23_to_X_ch.collect())
+  vcf_fixref(annotate.out, grch38_genome_ch.collect(), grch38_ref_panel_ch.collect())
+  filter_preimpute_vcf(vcf_fixref.out)
+
+  //Run imputation on each chromosome
+  split_by_chr(filter_preimpute_vcf.out, chromosome_ch)  
+  eagle_prephasing(split_by_chr.out, eagle_genetic_map_ch.collect(), phasing_ref_ch.collect())
+  minimac_imputation(eagle_prephasing.out, minimac_ref_ch.collect())
+
+  emit:
+  minimac_imputation.out[0]
+  minimac_imputation.out[1]
+  
 }
 
-process harmonise_genotypes{
-    input:
-    set file(study_name_bed), file(study_name_bim), file(study_name_fam) from bfile_ch
-    set file(vcf_file), file(vcf_file_index) from ref_panel_harmonise_genotypes.collect()
+workflow impute_non_PAR{
+  take:
+    bfile
 
-    output:
-    set file("harmonised.bed"), file("harmonised.bim"), file("harmonised.fam") into harmonised_genotypes
+  main:
+  impute_sex(bfile)
+  extract_female_samples(impute_sex.out)
+  CrossMap(impute_sex.out, chain_file_ch.collect())
+  GenotypeHarmonizer(CrossMap.out, grch38_ref_panel_ch.collect())
+  plink_to_vcf(GenotypeHarmonizer.out)
+  annotate(plink_to_vcf.out, annotation_file_23_to_X_ch.collect())
+  vcf_fixref(annotate.out, grch38_genome_ch.collect(), grch38_ref_panel_ch.collect())
+  initial_filter(vcf_fixref.out)
+  female_qc(extract_female_samples.out[0], initial_filter.out)
+  preimpute_filter(female_qc.out, initial_filter.out)
+  eagle_prephasing(preimpute_filter.out, eagle_genetic_map_ch.collect(), Channel.fromPath(params.eagle_phasing_reference + '/NonPAR/chrX.bcf*').collect())
+  minimac_imputation(eagle_prephasing.out, file(params.minimac_imputation_reference + '/NonPAR/chrX.m3vcf.gz'))
+  split_male_female_dosage(minimac_imputation.out, extract_female_samples.out[0], extract_female_samples.out[1])
+  double_male_dosage(split_male_female_dosage.out[0])
+  merge_male_female(double_male_dosage.out, split_male_female_dosage.out[1])
 
-    script:
-    if (params.harmonise_genotypes) {
-    """
-    java -jar /usr/bin/GenotypeHarmonizer.jar\
-     --input ${study_name_bed.baseName}\
-     --inputType PLINK_BED\
-     --ref ${vcf_file.simpleName}\
-     --refType VCF\
-     --update-id\
-     --output harmonised
-    """
-    }
-    else {
-    """
-    cp $study_name_bed harmonised.bed
-    cp $study_name_bim harmonised.bim
-    cp $study_name_fam harmonised.fam
-    """
-    }
+  emit:
+  merge_male_female.out[0]
+  merge_male_female.out[1]
 }
 
-process plink_to_vcf{
-    input:
-    set file(bed), file(bim), file(fam) from harmonised_genotypes
-
-    output:
-    file "harmonised.vcf.gz" into harmonised_vcf_ch
-
-    script:
-    """
-    plink2 --bfile ${bed.simpleName} --recode vcf-iid --out ${bed.simpleName}
-    bgzip harmonised.vcf
-    """
-}
-
-process vcf_fixref{
-    input:
-    file input_vcf from harmonised_vcf_ch
-    file fasta from ref_genome_ch.collect()
-    set file(vcf_file), file(vcf_file_index) from ref_panel_vcf_fixref.collect()
-
-    output:
-    file "fixref.vcf.gz" into filter_vcf_input
-
-    script:
-    """
-    bcftools index ${input_vcf}
-    bcftools +fixref ${input_vcf} -- -f ${fasta} -i ${vcf_file} | \
-     bcftools norm --check-ref x -f ${fasta} -Oz -o fixref.vcf.gz
-    """
-}
-
-process filter_preimpute_vcf{
-    publishDir "${params.outdir}/preimpute/", mode: 'copy',
-        saveAs: {filename -> if (filename == "filtered.vcf.gz") "${params.output_name}_preimpute.vcf.gz" else null }
-
-    input:
-    file input_vcf from filter_vcf_input
-
-    output:
-    set file("filtered.vcf.gz"), file("filtered.vcf.gz.csi") into split_vcf_input, missingness_input
-
-    script:
-    """
-    #Add tags
-    bcftools +fill-tags ${input_vcf} -Oz -o tagged.vcf.gz
-
-    #Filter rare and non-HWE variants and those with abnormal alleles and duplicates
-    bcftools filter -i 'INFO/HWE > 1e-6 & F_MISSING < 0.05 & MAF[0] > 0.01' tagged.vcf.gz |\
-     bcftools filter -e 'REF="N" | REF="I" | REF="D"' |\
-     bcftools filter -e "ALT='.'" |\
-     bcftools norm -d all |\
-     bcftools norm -m+any |\
-     bcftools view -m2 -M2 -Oz -o filtered.vcf.gz
-
-     #Index the output file
-     bcftools index filtered.vcf.gz
-    """
-}
-
-process calculate_missingness{
-    publishDir "${params.outdir}/preimpute/", mode: 'copy',
-        saveAs: {filename -> if (filename == "genotypes.imiss") "${params.output_name}.imiss" else null }
-    
-    input:
-    set file(input_vcf), file(input_vcf_index) from missingness_input 
-
-    output:
-    file "genotypes.imiss" into missing_individuals
-
-    script:
-    """
-    vcftools --gzvcf ${input_vcf} --missing-indv --out genotypes
-    """
-}
-
-process split_by_chr{
-    publishDir "${params.outdir}/preimpute/split_chr", mode: 'copy',
-        saveAs: {filename -> if (filename.indexOf(".vcf.gz") > 0) filename else null }
-    
-    input:
-    tuple file(input_vcf), file(input_vcf_index) from split_vcf_input
-    each chr from Channel.from(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22)
-
-    output:
-    tuple val(chr), file("chr_${chr}.vcf.gz") into individual_chromosomes
-
-    script:
-    """
-    bcftools view -r ${chr} ${input_vcf} -Oz -o chr_${chr}.vcf.gz
-    """
-}
-
-process eagle_prephasing{
-    input:
-    tuple chromosome, file(vcf) from individual_chromosomes
-    file genetic_map from genetic_map_ch.collect()
-    file phasing_reference from phasing_ref_ch.collect()
-
-    output:
-    tuple chromosome, file("chr_${chromosome}.phased.vcf.gz") into phased_vcf_cf
-
-    script:
-    """
-    bcftools index ${vcf}
-    eagle --vcfTarget=${vcf} \
-    --vcfRef=ALL.chr${chromosome}.phase3_integrated.20130502.genotypes.bcf \
-    --geneticMapFile=${genetic_map} \
-    --chrom=${chromosome} \
-    --outPrefix=chr_${chromosome}.phased \
-    --numThreads=8
-    """
-}
-
-process minimac_imputation{
-    publishDir "${params.outdir}/postimpute/", mode: 'copy', pattern: "*.dose.vcf.gz"
- 
-    input:
-    set chromosome, file(vcf) from phased_vcf_cf
-    file imputation_reference from imputation_ref_ch.collect()
-
-    output:
-    tuple chromosome, file("chr_${chromosome}.dose.vcf.gz") into imputed_vcf_cf
-
-    script:
-    """
-    minimac4 --refHaps ${chromosome}.1000g.Phase3.v5.With.Parameter.Estimates.m3vcf.gz \
-    --haps ${vcf} \
-    --prefix chr_${chromosome} \
-    --format GT,DS,GP \
-    --noPhoneHome
-    """
-}
-
-process crossmap_genotypes{
-    input:
-    file chain_file from chain_file_ch.collect()
-    file target_ref from target_ref_ch.collect()
-    tuple chromosome, file(vcf) from imputed_vcf_cf
-
-    output:
-    file "${vcf.simpleName}_mapped.vcf.gz" into mapped_vcf_ch
-
-    shell:
-    """
-    #Exlcude structural variants, beause they break latest version of CrossMap.py
-    bcftools view --exclude-types other ${vcf} -Oz -o ${vcf.simpleName}_noSVs.vcf.gz
-    
-    #Run CrossMap.py
-    CrossMap.py vcf ${chain_file} ${vcf.simpleName}_noSVs.vcf.gz ${target_ref} ${vcf.simpleName}_mapped.vcf
-    bgzip ${vcf.simpleName}_mapped.vcf
-    """
-}
-
-process filter_vcf{
-    input:
-    each file(vcf) from mapped_vcf_ch
-    val r2_thresh from Channel.from(params.r2_thresh)
-
-    output:
-    file "${vcf.simpleName}_filtered.vcf.gz" into filtered_vcfs
-
-    shell:
-    """
-    bcftools filter -i 'INFO/R2 > ${r2_thresh}' ${vcf} -Oz -o ${vcf.simpleName}_filtered.vcf.gz
-    """
-}
-
-process merge_vcf{
-    input:
-    file input_files from filtered_vcfs.collect()
-
-    output:
-    file "output.vcf.gz" into merged_vcf_ch
-
-    shell:
-    """
-    bcftools concat ${input_files.join(' ')} | bcftools sort -Oz -o output.vcf.gz
-    """
-}
-
-process keep_chromosomes{
-    publishDir "${params.outdir}/postimpute/crossmap_vcf", mode: 'copy',
-        saveAs: {filename -> if (filename == "renamed.vcf.gz") "${params.output_name}.vcf.gz" else null }
-    
-    input:
-    file input_vcf from merged_vcf_ch
-
-    output:
-    file "renamed.vcf.gz" into final_vcf_ch
-
-    shell:
-    """
-    bcftools index ${input_vcf}
-    bcftools view -r 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,X ${input_vcf} |\
-     bcftools annotate --set-id 'chr%CHROM\\_%POS\\_%REF\\_%FIRST_ALT' -Oz -o renamed.vcf.gz
-    """
-}
-
-process maf_filter{
-    publishDir "${params.outdir}/postimpute/crossmap_vcf", mode: 'copy',
-        saveAs: {filename -> if (filename == "filtered.vcf.gz") "${params.output_name}.MAF001.vcf.gz" else null }
-    
-    input:
-    file input_vcf from final_vcf_ch
-
-    output:
-    file "filtered.vcf.gz" into filtered_vcf_channel
-
-    shell:
-    """
-    bcftools filter -i 'MAF[0] > 0.01' ${input_vcf} -Oz -o filtered.vcf.gz
-    """
+workflow {
+  if (params.impute_non_PAR){
+    impute_non_PAR(bfile_ch)
+    main_flow(bfile_ch)
+    merge_unfiltered_vcf(main_flow.out[0].concat(impute_non_PAR.out[0]).collect(), main_flow.out[1].concat(impute_non_PAR.out[1]).collect())
+  }
+  else{
+    main_flow(bfile_ch)
+    merge_unfiltered_vcf(main_flow.out[0].collect(), main_flow.out[1].collect())
+  }
+    filter_vcf(merge_unfiltered_vcf.out)
 }
