@@ -49,6 +49,7 @@ nextflow run main.nf -profile eqtl_catalogue -resume\
 To run the pipeline for the first time, you need to log into the stage1 node to start nextflow there so that it is able to build the nextflow container. Subsequently, you can also use the `srun --pty bash` command to run nextflow as an slurm job interactive job. It is recommended to run srun or nexflow inside a [screen](https://linuxize.com/post/how-to-use-linux-screen/) session.
 
 ## Contributors
+* Ralf Tambets
 * Kaur Alasoo
 * Liina Anette Pärtel
 * Mark-Erik Kodar
