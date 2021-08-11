@@ -7,14 +7,14 @@ process filter_vcf{
     file(index)
 
     output:
-    file("${params.output_name}_filtered.vcf.gz")
-    file("${params.output_name}_filtered.vcf.gz.csi")
+    file("${params.output_name}.filtered.vcf.gz")
+    file("${params.output_name}.filtered.vcf.gz.csi")
 
     shell:
     """
     bcftools filter -i 'INFO/R2 > ${params.r2_thresh}' ${vcf} | \
-      bcftools filter -i 'MAF[0] > 0.01' -Oz -o ${params.output_name}_filtered.vcf.gz
-    bcftools index ${params.output_name}_filtered.vcf.gz
+      bcftools filter -i 'MAF[0] > 0.01' -Oz -o ${params.output_name}.filtered.vcf.gz
+    bcftools index ${params.output_name}.filtered.vcf.gz
     """
 }
 
