@@ -1,5 +1,11 @@
 # eQTL-Catalogue/genimpute workflow
-Genotype imputation and quality control workflow used by the eQTL Catalogue. Performs the following main steps:
+
+Genotype imputation and quality control workflow used by the eQTL Catalogue. 
+
+![High_level_schema](docs/metromap.png)
+
+
+Performs the following main steps:
 
 **Pre-imputation QC:**
 - Convert raw chip genotypes to GRCh38 coordinates with [CrossMap.py](http://crossmap.sourceforge.net/) v0.4.1
