@@ -14,34 +14,28 @@ def helpMessage() {
     The typical command for running the pipeline is as follows:
     nextflow run main.nf -profile eqtl_catalogue -resume\
         --bfile /gpfs/hpc/projects/genomic_references/CEDAR/genotypes/PLINK_100718_1018/CEDAR\
-        --harmonise_genotypes true\
         --output_name CEDAR_GRCh37_genotyped\
         --outdir CEDAR
 
     Mandatory arguments:
-      --bfile                       Path to the TSV file containing pipeline inputs (VCF, expression matrix, metadata)
+      --bfile                       Path to the raw genotypes in plink format (Typically on GRCh37 build)
       --output_name                 Prefix for the output files
 
     Genotype harmonisation & QC:
-      --harmonise_genotypes         Run GenotypeHarmonizer on the raw genotypes to correct flipped/swapped alleles (default: true)
-      --ref_panel                   Reference panel used by GenotypeHarmonizer. Ideally should match the reference panel used for imputation.
-      --ref_genome                  Reference genome fasta file for the raw genotypes (typically GRCh37).
+      --chain_file                  CrossMap chain file used to convert raw genotype from the source assembly to target assembly of the reference panel (typically GRCh37_to_GRCh38.chain)
+      --ref_panel                   VCF file containing the positions, REF and ALT alleles of the imputations reference panel. Used by Genotype Harmonizer (typically 1000 Genomes 30x on GRCh38).
+      --ref_genome                  Target reference genome fasta file for CrossMap (typically GRCh38).
 
     Phasing & Imputation:
-      --eagle_genetic_map           Eagle genetic map file
-      --eagle_phasing_reference     Phasing reference panel for Eagle (typically 1000 Genomes Phase 3)
-      --impute_PAR                  Whether or not to impute the PAR region
-      --impute_non_PAR              Whether or not to impute the non-PAR region
-      --minimac_imputation_reference Imputation reference panel for Minimac4 in M3VCF format (typically 1000 Genomes Phase 3)
+      --eagle_genetic_map           Eagle genetic map file (GRCh38)
+      --eagle_phasing_reference     Phasing reference panel for Eagle (typically 1000 Genomes 30x on GRCh38)
+      --impute_PAR                  Whether or not to impute the pseudo-autosomal region (PAR) of the X chromosome
+      --impute_non_PAR              Whether or not to impute the non-PAR part of the X chromsome
+      --minimac_imputation_reference Imputation reference panel for Minimac4 in M3VCF format (typically 1000 Genomes 30x on GRCh38)
       --r2_thresh                   Imputation quality score threshold for filtering poorly imputed variants
 
     Annotation:
       --annotation_file_23_to_X     Annotation file for bcftools
-      --annotation_file_X_to_23     Annotation file for bcftools
-
-    CrossMap.py:
-      --target_ref                  Reference genome fasta file for the target genome assembly (e.g. GRCh38)
-      --chain_file                  Chain file to translate genomic cooridnates from the source assembly to target assembly
     
     Other options:
       --outdir                      The output directory where the results will be saved
@@ -76,15 +70,15 @@ Channel
 // Reference panels
 
 Channel
-    .from(params.grch38_ref_panel)
+    .from(params.ref_panel)
     .map { ref -> [file("${ref}.vcf.gz"), file("${ref}.vcf.gz.tbi")]}
-    .set { grch38_ref_panel_ch} 
+    .set { ref_panel_ch} 
 
 //Reference genomes
 Channel
-    .fromPath(params.grch38_ref_genome)
-    .ifEmpty { exit 1, "GRCh38 reference genome file not found: ${params.grch38_ref_genome}" } 
-    .set { grch38_genome_ch }
+    .fromPath(params.ref_genome)
+    .ifEmpty { exit 1, "Reference genome file not found: ${params.ref_genome}" } 
+    .set { ref_genome_ch }
 
 // Eagle
 Channel
@@ -137,7 +131,7 @@ summary['Pipeline Name']            = 'eQTL-Catalogue/genimpute'
 summary['Pipeline Version']         = workflow.manifest.version
 summary['Run Name']                 = custom_runName ?: workflow.runName
 summary['PLINK bfile']              = params.bfile
-summary['Reference genome']         = params.grch38_ref_genome
+summary['Reference genome']         = params.ref_genome
 summary['Harmonise genotypes']      = params.harmonise_genotypes
 summary['Harmonisation ref panel']  = params.grch38_ref_panel
 summary['Eagle genetic map']        = params.eagle_genetic_map
@@ -187,10 +181,10 @@ workflow main_flow{
   main:
   //Convert input genotypes to GRCh38 coordinates
   CrossMap(bfile, chain_file_ch.collect())
-  GenotypeHarmonizer(CrossMap.out, grch38_ref_panel_ch.collect())
+  GenotypeHarmonizer(CrossMap.out, ref_panel_ch.collect())
   plink_to_vcf(GenotypeHarmonizer.out)
   annotate(plink_to_vcf.out, annotation_file_23_to_X_ch.collect())
-  vcf_fixref(annotate.out, grch38_genome_ch.collect(), grch38_ref_panel_ch.collect())
+  vcf_fixref(annotate.out, ref_genome_ch.collect(), ref_panel_ch.collect())
   filter_preimpute_vcf(vcf_fixref.out)
 
   //Run imputation on each chromosome
@@ -212,10 +206,10 @@ workflow impute_non_PAR{
   impute_sex(bfile)
   extract_female_samples(impute_sex.out)
   CrossMap(impute_sex.out, chain_file_ch.collect())
-  GenotypeHarmonizer(CrossMap.out, grch38_ref_panel_ch.collect())
+  GenotypeHarmonizer(CrossMap.out, ref_panel_ch.collect())
   plink_to_vcf(GenotypeHarmonizer.out)
   annotate(plink_to_vcf.out, annotation_file_23_to_X_ch.collect())
-  vcf_fixref(annotate.out, grch38_genome_ch.collect(), grch38_ref_panel_ch.collect())
+  vcf_fixref(annotate.out, ref_genome_ch.collect(), ref_panel_ch.collect())
   initial_filter(vcf_fixref.out)
   female_qc(extract_female_samples.out[0], initial_filter.out)
   preimpute_filter(female_qc.out, initial_filter.out)
