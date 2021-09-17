@@ -35,6 +35,7 @@ process merge_unfiltered_vcf{
     """
     bcftools concat ${input_files.join(' ')} -a -Ou | \
     bcftools annotate --set-id 'chr%CHROM\\_%POS\\_%REF\\_%FIRST_ALT' | \
+    bcftools +fill-tags | \
     bcftools sort -Oz -o ${params.output_name}.all_variants.vcf.gz
     bcftools index ${params.output_name}.all_variants.vcf.gz
     """
