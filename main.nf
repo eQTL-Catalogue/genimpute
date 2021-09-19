@@ -164,7 +164,7 @@ log.info "========================================="
 
 
 include { GenotypeHarmonizer } from './modules/GenotypeHarmonizer'
-include { plink_to_vcf; vcf_to_plink } from './modules/preimpute_QC'
+include { plink_to_vcf } from './modules/preimpute_QC'
 include { vcf_fixref; filter_preimpute_vcf; split_by_chr } from './modules/preimpute_QC'
 include { annotate } from './modules/preimpute_QC'
 include { CrossMap; CrossMap_QC } from './modules/CrossMap'

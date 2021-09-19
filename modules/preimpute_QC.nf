@@ -51,21 +51,6 @@ process vcf_fixref{
     """
 }
 
-process vcf_to_plink{
-    container = 'quay.io/eqtlcatalogue/genimpute:v20.06.1'
-
-    input:
-    tuple file(input_vcf_file), file(input_vcf_file_index)
-
-    output:
-    tuple file("converted.bed"), file("converted.bim"), file("converted.fam")
-
-    script:
-    """
-    plink2 --vcf ${input_vcf_file} --make-bed --output-chr MT --out converted
-    """
-}
-
 process filter_preimpute_vcf{
     publishDir "${params.outdir}/preimpute/", mode: 'copy',
         saveAs: {filename -> if (filename == "filtered.vcf.gz") "${params.output_name}_preimpute.vcf.gz" else null }
