@@ -39,20 +39,20 @@ plink --bfile Young_2019 --merge-x --make-bed --output-chr MT --out Young_2019_m
 ```
   
 
-## Running the workflow at UT HPC
+## Example command
+
+Imputing genotypes from the open access CEDAR dataset.
 
 ```
-module load java-1.8.0_40
-module load singularity/3.5.3
-
-nextflow run main.nf -profile eqtl_catalogue -resume\
-  --bfile /gpfs/hpc/projects/genomic_references/CEDAR/genotypes/PLINK_100718_1018/CEDAR\
+nextflow run main.nf \
+  -profile eqtl_catalogue -resume\
+  --bfile plink_genimpute/CEDAR\
   --harmonise_genotypes true\
-  --output_name CEDAR_GRCh37_genotyped\
-  --outdir results_CEDAR
+  --output_name CEDAR\
+  --outdir CEDAR\
+  --impute_PAR true\
+  --impute_non_PAR true
 ```
-
-To run the pipeline for the first time, you need to log into the stage1 node to start nextflow there so that it is able to build the nextflow container. Subsequently, you can also use the `srun --pty bash` command to run nextflow as an slurm job interactive job. It is recommended to run srun or nexflow inside a [screen](https://linuxize.com/post/how-to-use-linux-screen/) session.
 
 ## Contributors
 * Ralf Tambets
