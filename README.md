@@ -8,8 +8,8 @@ Genotype imputation and quality control workflow used by the eQTL Catalogue.
 Performs the following main steps:
 
 **Pre-imputation QC:**
-- Convert raw chip genotypes to GRCh38 coordinates with [CrossMap.py](http://crossmap.sourceforge.net/) v0.4.1
-- Align chip genotypes to the [1000 Genomes 30x on GRCh38](https://www.internationalgenome.org/data-portal/data-collection/30x-grch38) reference panel with [Genotype Harmonizer](https://github.com/molgenis/systemsgenetics/wiki/Genotype-Harmonizer).
+- Convert raw array genotypes to GRCh38 coordinates with [CrossMap.py](http://crossmap.sourceforge.net/) v0.4.1
+- Align array genotypes to the [1000 Genomes 30x on GRCh38](https://www.internationalgenome.org/data-portal/data-collection/30x-grch38) reference panel with [Genotype Harmonizer](https://github.com/molgenis/systemsgenetics/wiki/Genotype-Harmonizer).
 - Convert the genotypes to the VCF format with [PLINK](https://www.cog-genomics.org/plink/1.9/). 
 - Exclude variants with Hardy-Weinberg p-value < 1e-6, missingness > 0.05 and minor allele frequency < 0.01 with [bcftools](https://samtools.github.io/bcftools/)
 - Calculate individual-level missingness using [vcftools](https://vcftools.github.io/perl_module.html).
@@ -22,6 +22,7 @@ Performs the following main steps:
 - Exclude variants with imputation R2 < 0.4
 - Keep variants on chromosomes 1-22 and X
 - Keep variants with MAF > 0.01
+- Multiply genotype dosage of male samples on the Non-PAR region of the X chromsome by two for easier QTL mapping
 
 ## Input parameters
 
