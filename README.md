@@ -48,7 +48,6 @@ Imputing genotypes from the open access CEDAR dataset.
 nextflow run main.nf \
   -profile eqtl_catalogue -resume\
   --bfile plink_genimpute/CEDAR\
-  --harmonise_genotypes true\
   --output_name CEDAR\
   --outdir CEDAR\
   --impute_PAR true\
