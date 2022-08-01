@@ -209,7 +209,7 @@ workflow impute_non_PAR{
   main:
   impute_sex(bfile)
   extract_female_samples(impute_sex.out)
-  if (skip_crossmap){
+  if (params.skip_crossmap){
     GenotypeHarmonizer(impute_sex.out, ref_panel_ch.collect())
   } else {
     CrossMap(impute_sex.out, chain_file_ch.collect())
