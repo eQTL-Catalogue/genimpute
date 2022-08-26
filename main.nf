@@ -169,7 +169,7 @@ include { plink_to_vcf } from './modules/preimpute_QC'
 include { vcf_fixref; filter_preimpute_vcf; split_by_chr } from './modules/preimpute_QC'
 include { annotate } from './modules/preimpute_QC'
 include { CrossMap; CrossMap_QC } from './modules/CrossMap'
-include { eagle_prephasing } from './modules/eagle'
+include { eagle_prephasing; find_problematic_variants } from './modules/eagle'
 include { minimac_imputation } from './modules/minimac'
 include { filter_vcf; merge_unfiltered_vcf } from './modules/postimpute_QC'
 include { initial_filter; preimpute_filter; female_qc; impute_sex; extract_female_samples; split_male_female_dosage; double_male_dosage; merge_male_female} from './modules/impute_non_PAR.nf'
@@ -221,7 +221,8 @@ workflow impute_non_PAR{
   initial_filter(vcf_fixref.out)
   female_qc(extract_female_samples.out[0], initial_filter.out)
   preimpute_filter(female_qc.out, initial_filter.out)
-  eagle_prephasing(preimpute_filter.out, eagle_genetic_map_ch.collect(), Channel.fromPath(params.eagle_phasing_reference + '/NonPAR/chrX.bcf*').collect())
+  eagle_prephasing(preimpute_filter.out, eagle_genetic_map_ch.collect(), Channel.fromPath(params.eagle_phasing_reference + '/NonPAR/chrX.bcf*').collect()) // preimpute_filter.out, get indiv, remove snps
+  find_problematic_variants(eagle_prephasing.out)
   minimac_imputation(eagle_prephasing.out, file(params.minimac_imputation_reference + '/NonPAR/chrX.m3vcf.gz'))
   split_male_female_dosage(minimac_imputation.out, extract_female_samples.out[0], extract_female_samples.out[1])
   double_male_dosage(split_male_female_dosage.out[0])
