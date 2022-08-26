@@ -20,3 +20,20 @@ process eagle_prephasing{
     --numThreads=8
     """
 }
+
+process find_problematic_variants{
+    publishDir "${params.outdir}/problem_variants/", mode: 'copy', pattern: "*problem_variants.txt"
+    container = 'quay.io/eqtlcatalogue/susier:v21.10.2'
+
+    input:
+    file chrX_phased_vcf
+
+    output:
+    file("problem_variants.txt")
+
+    script:
+    """
+    Rscript $baseDir/bin/find_problematic_variants.R --filename ${chrX_phased_vcf} 
+
+    """
+}
