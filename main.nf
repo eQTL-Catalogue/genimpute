@@ -169,7 +169,8 @@ include { plink_to_vcf } from './modules/preimpute_QC'
 include { vcf_fixref; filter_preimpute_vcf; split_by_chr } from './modules/preimpute_QC'
 include { annotate } from './modules/preimpute_QC'
 include { CrossMap; CrossMap_QC } from './modules/CrossMap'
-include { eagle_prephasing; find_problematic_variants } from './modules/eagle'
+include { eagle_prephasing } from './modules/eagle'
+include { find_problematic_variants; remove_problematic_variants } from './modules/problematic_ind_variants'
 include { minimac_imputation } from './modules/minimac'
 include { filter_vcf; merge_unfiltered_vcf } from './modules/postimpute_QC'
 include { initial_filter; preimpute_filter; female_qc; impute_sex; extract_female_samples; split_male_female_dosage; double_male_dosage; merge_male_female} from './modules/impute_non_PAR.nf'
@@ -201,11 +202,23 @@ workflow main_flow{
   minimac_imputation.out[1]
   
 }
-
-workflow impute_non_PAR{
+workflow pre_impute_non_PAR_wo_problem_vars{
   take:
     bfile
+  main:
+  pre_impute_non_PAR(bfile)
 
+  emit:
+  eagle_prephasing_results = pre_impute_non_PAR.out.eagle_prephasing_results
+  extracted_female_samples = pre_impute_non_PAR.out.extracted_female_samples
+  extracted_male_samples = pre_impute_non_PAR.out.extracted_male_samples
+
+
+}
+
+workflow pre_impute_non_PAR{
+  take:
+    bfile 
   main:
   impute_sex(bfile)
   extract_female_samples(impute_sex.out)
@@ -221,10 +234,27 @@ workflow impute_non_PAR{
   initial_filter(vcf_fixref.out)
   female_qc(extract_female_samples.out[0], initial_filter.out)
   preimpute_filter(female_qc.out, initial_filter.out)
-  eagle_prephasing(preimpute_filter.out, eagle_genetic_map_ch.collect(), Channel.fromPath(params.eagle_phasing_reference + '/NonPAR/chrX.bcf*').collect()) // preimpute_filter.out, get indiv, remove snps
-  find_problematic_variants(eagle_prephasing.out)
-  minimac_imputation(eagle_prephasing.out, file(params.minimac_imputation_reference + '/NonPAR/chrX.m3vcf.gz'))
-  split_male_female_dosage(minimac_imputation.out, extract_female_samples.out[0], extract_female_samples.out[1])
+  eagle_prephasing(preimpute_filter.out, eagle_genetic_map_ch.collect(), Channel.fromPath(params.eagle_phasing_reference + '/NonPAR/chrX.bcf*').collect()) 
+
+
+  emit:
+  eagle_prephasing_results = eagle_prephasing.out
+  extracted_female_samples = extract_female_samples.out[0] 
+  extracted_male_samples = extract_female_samples.out[1] 
+
+
+}
+
+workflow impute_non_PAR{
+  take:
+    eagle_prephasing_results
+    extracted_female_samples 
+    extracted_male_samples
+
+  main:
+
+  minimac_imputation(eagle_prephasing_results, file(params.minimac_imputation_reference + '/NonPAR/chrX.m3vcf.gz'))
+  split_male_female_dosage(minimac_imputation.out, extracted_female_samples, extracted_male_samples)
   double_male_dosage(split_male_female_dosage.out[0])
   merge_male_female(double_male_dosage.out, split_male_female_dosage.out[1])
 
@@ -234,14 +264,20 @@ workflow impute_non_PAR{
 }
 
 workflow {
-  if (params.impute_non_PAR){
-    impute_non_PAR(bfile_ch)
-    main_flow(bfile_ch)
+  if (params.impute_non_PAR){  
+    pre_impute_non_PAR(bfile_ch)
+    find_problematic_variants(pre_impute_non_PAR.out.eagle_prephasing_results) //TODO: FIX when no prob vars, gives error 
+    remove_problematic_variants(bfile_ch, find_problematic_variants.out.problematic_variants) 
+    pre_impute_non_PAR_wo_problem_vars(remove_problematic_variants.out.bfiles_wo_problematic_variants)  
+    impute_non_PAR(pre_impute_non_PAR_wo_problem_vars.out.eagle_prephasing_results, pre_impute_non_PAR_wo_problem_vars.out.extracted_female_samples, pre_impute_non_PAR_wo_problem_vars.out.extracted_male_samples)
+    main_flow(remove_problematic_variants.out.bfiles_wo_problematic_variants)
     merge_unfiltered_vcf(main_flow.out[0].concat(impute_non_PAR.out[0]).collect(), main_flow.out[1].concat(impute_non_PAR.out[1]).collect())
   }
+
   else{
     main_flow(bfile_ch)
     merge_unfiltered_vcf(main_flow.out[0].collect(), main_flow.out[1].collect())
   }
     filter_vcf(merge_unfiltered_vcf.out)
 }
+

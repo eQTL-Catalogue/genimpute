@@ -12,6 +12,13 @@ opt <- optparse::parse_args(optparse::OptionParser(option_list=option_list))
 is_diploid <- function(vector){
   vector %like% "\\|"
 }
+
+save_file <- function(df, file_name, has_col_names){
+  write.table(df, file = file_name, append = FALSE, quote = F, sep = " ",
+              eol = "\n", na = "NA", dec = ".", row.names = F,
+              col.names = has_col_names, qmethod = c("escape", "double"),
+              fileEncoding = "")
+}
 filename = opt$filename
 
 #Import genotypes
@@ -26,6 +33,7 @@ selected_idvs = gt_mat[,!selection]
 
 #Build final table
 problematic_individuals = dplyr::bind_cols(gt_matrix[,c(1:9)], selected_idvs)
+save_file(problematic_individuals, "problematic_individuals.txt", TRUE)
 problematic_individuals_gt_matrix = problematic_individuals[,-c(1:9)]
 
 #find problematic variants
@@ -33,7 +41,6 @@ has_diploid = dplyr::mutate(problematic_individuals_gt_matrix, across(everything
 has_any_diploid_per_var = has_diploid %>% mutate(has_any_diploid_per_var = reduce(., `|`))
 problematic_indivs_labled_prob_vars = dplyr::bind_cols(problematic_individuals[,c(1:9)], has_any_diploid_per_var)
 problem_vars = filter(problematic_indivs_labled_prob_vars, has_any_diploid_per_var == T)  %>% select(ID)
-write.table(problem_vars, file = "problem_variants.txt", append = FALSE, quote = F, sep = " ",
-            eol = "\n", na = "NA", dec = ".", row.names = F,
-            col.names = F, qmethod = c("escape", "double"),
-            fileEncoding = "")
+#if (nrow(problem_vars)*ncol(problem_vars) > 0) {
+save_file(problem_vars, "problematic_variants.txt", FALSE )
+#}
