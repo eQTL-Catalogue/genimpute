@@ -33,14 +33,19 @@ selected_idvs = gt_mat[,!selection]
 
 #Build final table
 problematic_individuals = dplyr::bind_cols(gt_matrix[,c(1:9)], selected_idvs)
-save_file(problematic_individuals, "problematic_individuals.txt", TRUE)
 problematic_individuals_gt_matrix = problematic_individuals[,-c(1:9)]
-
-#find problematic variants
-has_diploid = dplyr::mutate(problematic_individuals_gt_matrix, across(everything(), is_diploid))
-has_any_diploid_per_var = has_diploid %>% mutate(has_any_diploid_per_var = reduce(., `|`))
-problematic_indivs_labled_prob_vars = dplyr::bind_cols(problematic_individuals[,c(1:9)], has_any_diploid_per_var)
-problem_vars = filter(problematic_indivs_labled_prob_vars, has_any_diploid_per_var == T)  %>% select(ID)
-#if (nrow(problem_vars)*ncol(problem_vars) > 0) {
-save_file(problem_vars, "problematic_variants.txt", FALSE )
-#}
+if (dim(problematic_individuals_gt_matrix)[2] == 0) {
+  save_file(data.frame(), "problematic_individuals.txt", FALSE )
+} else{
+  save_file(problematic_individuals, "problematic_individuals.txt", TRUE)
+}
+if (dim(problematic_individuals_gt_matrix)[2] == 0) {
+  save_file(data.frame(), "problematic_variants.txt", FALSE )
+} else {
+  #find problematic variants
+  has_diploid = dplyr::mutate(problematic_individuals_gt_matrix, across(everything(), is_diploid))
+  has_any_diploid_per_var = has_diploid %>% mutate(has_any_diploid_per_var = reduce(., `|`))
+  problematic_indivs_labled_prob_vars = dplyr::bind_cols(problematic_individuals[,c(1:9)], has_any_diploid_per_var)
+  problem_vars = filter(problematic_indivs_labled_prob_vars, has_any_diploid_per_var == T)  %>% select(ID)
+  save_file(problem_vars, "problematic_variants.txt", FALSE )
+}

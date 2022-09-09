@@ -10,6 +10,7 @@ process find_problematic_variants{
 
     output:
     path("problematic_variants.txt"), emit: problematic_variants
+    path("problematic_individuals.txt"), emit: problematic_individuals
 
     script:
     """

@@ -266,9 +266,9 @@ workflow impute_non_PAR{
 workflow {
   if (params.impute_non_PAR){  
     pre_impute_non_PAR(bfile_ch)
-    find_problematic_variants(pre_impute_non_PAR.out.eagle_prephasing_results) //TODO: FIX when no prob vars, gives error 
-    remove_problematic_variants(bfile_ch, find_problematic_variants.out.problematic_variants) 
-    pre_impute_non_PAR_wo_problem_vars(remove_problematic_variants.out.bfiles_wo_problematic_variants)  
+    find_problematic_variants(pre_impute_non_PAR.out.eagle_prephasing_results) 
+    remove_problematic_variants(bfile_ch, find_problematic_variants.out.problematic_variants) // TODO: Optional file saving needed to not to re-run when no problematic ind and variants detected?
+    pre_impute_non_PAR_wo_problem_vars(remove_problematic_variants.out.bfiles_wo_problematic_variants)  // TODO: check if its OK to re*run if no problem ind and variants detected (is it common?)
     impute_non_PAR(pre_impute_non_PAR_wo_problem_vars.out.eagle_prephasing_results, pre_impute_non_PAR_wo_problem_vars.out.extracted_female_samples, pre_impute_non_PAR_wo_problem_vars.out.extracted_male_samples)
     main_flow(remove_problematic_variants.out.bfiles_wo_problematic_variants)
     merge_unfiltered_vcf(main_flow.out[0].concat(impute_non_PAR.out[0]).collect(), main_flow.out[1].concat(impute_non_PAR.out[1]).collect())
