@@ -25,6 +25,7 @@ def helpMessage() {
       --chain_file                  CrossMap chain file used to convert raw genotype from the source assembly to target assembly of the reference panel (typically GRCh37_to_GRCh38.chain)
       --ref_panel                   VCF file containing the positions, REF and ALT alleles of the imputations reference panel. Used by Genotype Harmonizer (typically 1000 Genomes 30x on GRCh38).
       --ref_genome                  Target reference genome fasta file for CrossMap (typically GRCh38).
+      --skip_crossmap               Skip the CrossMap step. Only select this option if the input data uses GRCh38 coordinates (deault: false).
 
     Phasing & Imputation:
       --eagle_genetic_map           Eagle genetic map file (GRCh38)
@@ -179,8 +180,12 @@ workflow main_flow{
   
   main:
   //Convert input genotypes to GRCh38 coordinates
-  CrossMap(bfile, chain_file_ch.collect())
-  GenotypeHarmonizer(CrossMap.out, ref_panel_ch.collect())
+  if (params.skip_crossmap){
+      GenotypeHarmonizer(bfile, ref_panel_ch.collect())
+  } else {
+      CrossMap(bfile, chain_file_ch.collect())
+      GenotypeHarmonizer(CrossMap.out, ref_panel_ch.collect())
+  }
   plink_to_vcf(GenotypeHarmonizer.out)
   annotate(plink_to_vcf.out, annotation_file_23_to_X_ch.collect())
   vcf_fixref(annotate.out, ref_genome_ch.collect(), ref_panel_ch.collect())
@@ -204,8 +209,12 @@ workflow impute_non_PAR{
   main:
   impute_sex(bfile)
   extract_female_samples(impute_sex.out)
-  CrossMap(impute_sex.out, chain_file_ch.collect())
-  GenotypeHarmonizer(CrossMap.out, ref_panel_ch.collect())
+  if (params.skip_crossmap){
+    GenotypeHarmonizer(impute_sex.out, ref_panel_ch.collect())
+  } else {
+    CrossMap(impute_sex.out, chain_file_ch.collect())
+    GenotypeHarmonizer(CrossMap.out, ref_panel_ch.collect())
+  }
   plink_to_vcf(GenotypeHarmonizer.out)
   annotate(plink_to_vcf.out, annotation_file_23_to_X_ch.collect())
   vcf_fixref(annotate.out, ref_genome_ch.collect(), ref_panel_ch.collect())
