@@ -1,7 +1,0 @@
-name: nf-core-imputation-1.0dev
-channels:
-  - conda-forge
-  - bioconda
-  - defaults
-dependencies:
-  - bioconda::java-jdk=8.0.112
